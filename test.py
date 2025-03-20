@@ -11,6 +11,7 @@ else:
     device = torch.device("cpu")
 
 print(f"I am worker {dist.get_rank()} of {dist.get_world_size()} on {device}!")
+device_name = torch.cuda.get_device_name(dist.get_rank() % torch.cuda.device_count())
 
 # Create a tensor on GPU and perform all_reduce
 a = torch.tensor([dist.get_rank()], device=device)
