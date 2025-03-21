@@ -1,3 +1,5 @@
+import os
+
 import torch
 import torch.distributed as dist
 
@@ -9,6 +11,8 @@ if torch.cuda.is_available():
     device = torch.device(f"cuda:{dist.get_rank() % torch.cuda.device_count()}")
 else:
     device = torch.device("cpu")
+
+print(os.environ)
 
 print(f"I am worker {dist.get_rank()} of {dist.get_world_size()} on {device}!")
 device_name = torch.cuda.get_device_name(dist.get_rank() % torch.cuda.device_count())
