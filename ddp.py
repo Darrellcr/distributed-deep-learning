@@ -32,6 +32,13 @@ def set_seed(seed):
     torch.backends.cudnn.benchmark = True
 
 
+class Normalize:
+    def __call__(self, img):
+        img = img / 255.
+        
+        return img.float()
+    
+
 class AptosDataset(Dataset):
     def __init__(self, csv_file, root_dir, filename_col, label_col='diagnosis', transform=None):
         self.metadata = pd.read_csv(csv_file)
@@ -93,7 +100,6 @@ class Trainer:
         self.optimizer.step()
 
     def _run_epoch(self, epoch):
-        print(next(iter(self.train_data)))
         b_sz = len(next(iter(self.train_data))[0])
         self.train_data.sampler.set_epoch(epoch)
         for source, targets in self.train_data:
@@ -126,6 +132,7 @@ def main():
         root_dir="/mnt/dcornelius/preprocessed-aptos/train_images",
         filename_col="new_id_code",
         label_col="diagnosis",
+        transform=Normalize(),
     )
     sampler = DistributedSampler(dataset)
     data_loader = DataLoader(dataset, batch_size=32, sampler=sampler)
