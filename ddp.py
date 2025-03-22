@@ -1,6 +1,5 @@
 import os
 import random
-import tqdm
 
 import numpy as np
 import pandas as pd
@@ -11,6 +10,7 @@ from torch.nn import functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import Dataset, DataLoader, DistributedSampler
 from torchvision import models, io
+from tqdm import tqdm
 
 
 def setup():
