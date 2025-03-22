@@ -46,7 +46,7 @@ class AptosDataset(Dataset):
     def __getitem__(self, idx):
         img_name = str(self.metadata.loc[idx, self.filename_col])
         img_path = os.path.join(self.root_dir, img_name + '.png')
-        image = io.decode_image(img_path)    
+        image = io.read_image(img_path)    
         if self.transform:
             image = self.transform(image)
 
