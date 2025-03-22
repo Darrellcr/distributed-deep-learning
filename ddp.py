@@ -61,7 +61,7 @@ class Trainer:
         model: torch.nn.Module,
         train_data: DataLoader,
         optimizer: torch.optim.Optimizer,
-        save_every: int,
+        save_every: int = 0,
         snapshot_path: str = '',
     ) -> None:
         self.global_rank = dist.get_rank()
@@ -112,8 +112,8 @@ class Trainer:
     def train(self, max_epochs: int):
         for epoch in range(self.epochs_run, max_epochs):
             self._run_epoch(epoch)
-            # if self.local_rank == 0 and epoch % self.save_every == 0:
-            #     self._save_snapshot(epoch)
+            if self.local_rank == 0 and self.save_every != 0 and epoch % self.save_every == 0:
+                self._save_snapshot(epoch)
 
 
 def main():
@@ -128,7 +128,7 @@ def main():
     )
     sampler = DistributedSampler(dataset)
     data_loader = DataLoader(dataset, batch_size=32, sampler=sampler)
-    model = models.resnet50(weights=models.ResNet50_Weights)
+    model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
     optimizer = optim.Adam(model.parameters())
 
     trainer = Trainer(
