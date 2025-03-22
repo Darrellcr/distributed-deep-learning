@@ -137,7 +137,7 @@ def main():
         transform=Normalize(),
     )
     sampler = DistributedSampler(dataset)
-    data_loader = DataLoader(dataset, batch_size=16, sampler=sampler)
+    data_loader = DataLoader(dataset, batch_size=8, sampler=sampler)
     model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
     optimizer = optim.Adam(model.parameters())
 
