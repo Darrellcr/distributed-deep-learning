@@ -93,6 +93,7 @@ class Trainer:
         self.optimizer.step()
 
     def _run_epoch(self, epoch):
+        print(next(iter(self.train_data)))
         b_sz = len(next(iter(self.train_data))[0])
         self.train_data.sampler.set_epoch(epoch)
         for source, targets in self.train_data:
