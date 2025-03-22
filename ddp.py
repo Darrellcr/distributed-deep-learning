@@ -1,5 +1,6 @@
 import os
 import random
+import tqdm
 
 import numpy as np
 import pandas as pd
@@ -102,7 +103,8 @@ class Trainer:
     def _run_epoch(self, epoch):
         b_sz = len(next(iter(self.train_data))[0])
         self.train_data.sampler.set_epoch(epoch)
-        for source, targets in self.train_data:
+        print(f"[GPU{self.global_rank}] Starting Epoch {epoch}")
+        for source, targets in tqdm(self.train_data):
             source = source.to(self.local_rank)
             targets = targets.to(self.local_rank)
             self._run_batch(source, targets)
@@ -144,7 +146,7 @@ def main():
         train_data=data_loader,
         optimizer=optimizer,
     )
-    trainer.train(max_epochs=5)
+    trainer.train(max_epochs=2)
     
     cleanup()
 
