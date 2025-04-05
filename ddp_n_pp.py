@@ -16,11 +16,11 @@ from tqdm import tqdm
 
 
 def setup():
-    local_rank = dist.get_rank() % torch.cuda.device_count()
-    torch.cuda.set_device(local_rank)
     dist.init_process_group(backend='nccl')
     device_mesh = init_device_mesh(
         'cuda', mesh_shape=(3, 2), mesh_dim_names=('dp', 'pp'))
+    local_rank = dist.get_rank() % torch.cuda.device_count()
+    torch.cuda.set_device(local_rank)
     
     return device_mesh
 
