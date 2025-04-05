@@ -92,9 +92,9 @@ class Trainer:
             self._load_snapshot(snapshot_path)
 
         first_batch = next(iter(self.train_data))
-        example_input_mb = first_batch.chunk(num_microbatches)[0]
-        print('example_input_mb')
-        print(example_input_mb)
+        # example_input_mb = first_batch.chunk(num_microbatches)[0]
+        print('first_batch')
+        print(first_batch)
         print('device_mesh')
         print(device_mesh['dp'].get_group())
         print(device_mesh['pp'].get_group())
