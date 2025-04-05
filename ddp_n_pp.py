@@ -7,7 +7,7 @@ import torch
 from torch import optim
 import torch.distributed as dist
 from torch.distributed.device_mesh import init_device_mesh, DeviceMesh
-from torch.distributed.pipelining import pipeline, SplitPoint
+from torch.distributed.pipelining import pipeline, SplitPoint, ScheduleGPipe
 from torch.nn import functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import Dataset, DataLoader, DistributedSampler
@@ -16,10 +16,11 @@ from tqdm import tqdm
 
 
 def setup():
-    device_mesh = init_device_mesh(
-        'cuda', mesh_shape=(3, 2), mesh_dim_names=('dp', 'pp'))
     local_rank = dist.get_rank() % torch.cuda.device_count()
     torch.cuda.set_device(local_rank)
+    dist.init_process_group(backend='nccl')
+    device_mesh = init_device_mesh(
+        'cuda', mesh_shape=(3, 2), mesh_dim_names=('dp', 'pp'))
     
     return device_mesh
 
@@ -81,30 +82,30 @@ class Trainer:
     ) -> None:
         self.global_rank = dist.get_rank()
         self.local_rank = self.global_rank % torch.cuda.device_count()
+        self.device = torch.device(f'cuda:{self.local_rank}')
         self.model = model.to(self.local_rank)
         self.train_data: DataLoader[torch.Tensor] = train_data
         self.optimizer = optimizer
         self.save_every = save_every
         self.epochs_run = 0
         self.snapshot_path = snapshot_path
+        self.num_microbatches = num_microbatches
         if os.path.exists(snapshot_path):
             print("Loading snapshot")
             self._load_snapshot(snapshot_path)
 
-        first_batch = next(iter(self.train_data))
-        # example_input_mb = first_batch.chunk(num_microbatches)[0]
-        # print('first_batch')
-        # print(first_batch)
-        print('device_mesh')
-        print(device_mesh['dp'])
-        print(device_mesh['pp'])
-        # print(device_mesh['dp'].get_group())
-        # print(device_mesh['pp'].get_group())
-        # pipeline
-        # pipe = pipeline(
-        #     module=self.model,
-        #     split
-        # )
+        first_batch: list[torch.Tensor] = next(iter(self.train_data))
+        x, _ = first_batch
+        x_mb = x.chunk(self.num_microbatches)
+
+        self.model.to(self.device)
+        self.model_pipeline = pipeline(
+            self.model,
+            mb_args=(x_mb),
+        )
+
+        print('split model')
+        print(self.model_pipeline)
 
 
     def _load_snapshot(self, snapshot_path):
