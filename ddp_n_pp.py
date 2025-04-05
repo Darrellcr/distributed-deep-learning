@@ -96,8 +96,9 @@ class Trainer:
         # print('first_batch')
         # print(first_batch)
         print('device_mesh')
-        print(device_mesh['dp'].get_group())
-        print(device_mesh['pp'].get_group())
+        print(device_mesh)
+        # print(device_mesh['dp'].get_group())
+        # print(device_mesh['pp'].get_group())
         # pipeline
         # pipe = pipeline(
         #     module=self.model,
