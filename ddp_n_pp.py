@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 def setup():
     device_mesh = init_device_mesh(
-        'cuda', mesh_shape=(2, 2), mesh_dim_names=('dp', 'pp'))
+        'cuda', mesh_shape=(3, 2), mesh_dim_names=('dp', 'pp'))
     local_rank = dist.get_rank() % torch.cuda.device_count()
     torch.cuda.set_device(local_rank)
     
