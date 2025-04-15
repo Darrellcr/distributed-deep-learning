@@ -139,7 +139,7 @@ class Trainer:
         if self.local_rank == 0:
             self.schedule.step(source, target=targets)
         else:
-            output = self.schedule.step()
+            output = self.schedule.step(target=targets)
 
         # loss = F.cross_entropy(output, targets)
         # loss.backward()
