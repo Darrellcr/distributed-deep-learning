@@ -108,7 +108,7 @@ class Trainer:
         )
 
         pp_size = self.device_mesh['pp'].size()
-        loss_fn = F.cross_entropy if self.local_rank == pp_size - 1 else None
+        loss_fn = F.cross_entropy if self.local_rank == 0 else None
         self.schedule = ScheduleGPipe(
             self.model_stage,
             n_microbatches=self.num_microbatches,
