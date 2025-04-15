@@ -95,22 +95,22 @@ class Trainer:
             print("Loading snapshot")
             self._load_snapshot(snapshot_path)
 
-        first_batch: list[torch.Tensor] = next(iter(self.train_data))
-        x, _ = first_batch
-        x_mbs = x.chunk(self.num_microbatches)
+        # first_batch: list[torch.Tensor] = next(iter(self.train_data))
+        # x, _ = first_batch
+        # x_mbs = x.chunk(self.num_microbatches)
 
         self.model_stage = self.model_stages[self.local_rank]
         self.model_stage.to(self.device)
         self.model_stage = DDP(self.model_stage, process_group=self.device_mesh['dp'].get_group())
 
-        input_args = x_mbs[0] if self.local_rank == 0 else None
+        # input_args = x_mbs[0] if self.local_rank == 0 else None
         self.model_stage = PipelineStage(
             self.model_stage,
             stage_index=self.local_rank,
             num_stages=len(self.model_stages),
             device=self.device,
             group=self.device_mesh['pp'].get_group(),
-            input_args=input_args,
+            # input_args=input_args,
         )
 
         self.schedule = ScheduleGPipe(
