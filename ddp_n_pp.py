@@ -183,21 +183,21 @@ def main():
     data_loader = DataLoader(dataset, batch_size=8, sampler=sampler)
     # model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
     model = models.resnet50()
-    stage1 = nn.Sequential([
+    stage1 = nn.Sequential(
         model.conv1,
         model.bn1,
         model.relu,
         model.maxpool,
         model.layer1,
         model.layer2,
-    ])
-    stage2 = nn.Sequential([
+    )
+    stage2 = nn.Sequential(
         model.layer3,
         model.layer4,
         model.avgpool,
         nn.Flatten(),
         model.fc,
-    ])
+    )
     model_stages = [stage1, stage2]
     optimizers = [optim.Adam(stage.parameters()) for stage in model_stages]
 
