@@ -95,28 +95,24 @@ class Trainer:
             print("Loading snapshot")
             self._load_snapshot(snapshot_path)
 
-        # first_batch: list[torch.Tensor] = next(iter(self.train_data))
-        # x, _ = first_batch
-        # x_mbs = x.chunk(self.num_microbatches)
-
         self.model_stage = self.model_stages[self.local_rank]
         self.model_stage.to(self.device)
         self.model_stage = DDP(self.model_stage, process_group=self.device_mesh['dp'].get_group())
 
-        # input_args = x_mbs[0] if self.local_rank == 0 else None
         self.model_stage = PipelineStage(
             self.model_stage,
             stage_index=self.local_rank,
             num_stages=len(self.model_stages),
             device=self.device,
             group=self.device_mesh['pp'].get_group(),
-            # input_args=input_args,
         )
 
+        pp_size = self.device_mesh['pp'].size()
+        loss_fn = F.cross_entropy if self.local_rank == pp_size - 1 else None
         self.schedule = ScheduleGPipe(
             self.model_stage,
             n_microbatches=self.num_microbatches,
-            loss_fn=F.cross_entropy,
+            loss_fn=loss_fn,
         )
 
     def _load_snapshot(self, snapshot_path):
@@ -143,10 +139,10 @@ class Trainer:
         if self.local_rank == 0:
             self.schedule.step(source)
         else:
-            output= self.schedule.step()
+            output = self.schedule.step()
 
-        loss = F.cross_entropy(output, targets)
-        loss.backward()
+        # loss = F.cross_entropy(output, targets)
+        # loss.backward()
         
         # self.optimizer.step()
         for optimizer in self.optimizers:
