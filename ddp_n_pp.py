@@ -107,12 +107,12 @@ class Trainer:
             group=self.device_mesh['pp'].get_group(),
         )
 
-        pp_size = self.device_mesh['pp'].size()
-        loss_fn = F.cross_entropy if self.local_rank == 0 else None
+        # pp_size = self.device_mesh['pp'].size()
+        # loss_fn = F.cross_entropy if self.local_rank == 0 else None
         self.schedule = ScheduleGPipe(
             self.model_stage,
             n_microbatches=self.num_microbatches,
-            loss_fn=loss_fn,
+            loss_fn=F.cross_entropy,
         )
 
     def _load_snapshot(self, snapshot_path):
@@ -137,7 +137,7 @@ class Trainer:
             optimizer.zero_grad()
 
         if self.local_rank == 0:
-            self.schedule.step(source)
+            self.schedule.step(source, target=targets)
         else:
             output = self.schedule.step()
 
