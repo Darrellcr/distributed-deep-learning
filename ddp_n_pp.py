@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import torch
 from torch import optim, nn
-import torch.distributed as distf
+import torch.distributed as dist
 from torch.distributed.device_mesh import init_device_mesh, DeviceMesh
 from torch.distributed.pipelining import SplitPoint, ScheduleGPipe, PipelineStage
 from torch.nn import functional as F
