@@ -67,6 +67,12 @@ class AptosDataset(Dataset):
         label = self.metadata.loc[idx, self.label_col]
 
         return image, label
+    
+
+def custom_loss_fn(output: torch.Tensor, target: torch.Tensor):
+    print(f"Output shape: {output.shape}")
+    print(f"Target shape: {target.shape}")
+    return F.cross_entropy(output, target)
 
 
 class Trainer:
@@ -112,7 +118,8 @@ class Trainer:
         self.schedule = ScheduleGPipe(
             self.model_stage,
             n_microbatches=self.num_microbatches,
-            loss_fn=F.cross_entropy,
+            # loss_fn=F.cross_entropy,
+            loss_fn=custom_loss_fn,
         )
 
     def _load_snapshot(self, snapshot_path):
