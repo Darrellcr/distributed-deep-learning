@@ -137,7 +137,7 @@ class Trainer:
             optimizer.zero_grad()
 
         if self.local_rank == 0:
-            self.schedule.step(source, target=targets)
+            self.schedule.step(source)
         else:
             output = self.schedule.step(target=targets)
 
@@ -162,8 +162,8 @@ class Trainer:
     def train(self, max_epochs: int):
         for epoch in range(self.epochs_run, max_epochs):
             self._run_epoch(epoch)
-            if self.local_rank == 0 and self.save_every != 0 and epoch % self.save_every == 0:
-                self._save_snapshot(epoch)
+            # if self.local_rank == 0 and self.save_every != 0 and epoch % self.save_every == 0:
+            #     self._save_snapshot(epoch)
 
 
 def main():
