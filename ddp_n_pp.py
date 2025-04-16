@@ -139,7 +139,7 @@ class Trainer:
         if self.local_rank == 0:
             self.schedule.step(source)
         elif self.local_rank == len(self.model_stages) - 1:
-            self.schedule.step(targets)
+            self.schedule.step(target=targets)
         else:
             self.schedule.step()
 
