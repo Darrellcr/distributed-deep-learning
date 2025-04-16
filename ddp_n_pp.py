@@ -138,8 +138,10 @@ class Trainer:
 
         if self.local_rank == 0:
             self.schedule.step(source)
+        elif self.local_rank == len(self.model_stages) - 1:
+            self.schedule.step(targets)
         else:
-            output = self.schedule.step(target=targets)
+            self.schedule.step()
 
         # loss = F.cross_entropy(output, targets)
         # loss.backward()
@@ -152,6 +154,7 @@ class Trainer:
         b_sz = len(next(iter(self.train_data))[0])
         self.train_data.sampler.set_epoch(epoch)
         print(f"[GPU{self.global_rank}] Starting Epoch {epoch}")
+        print('batch size:', b_sz)
         for source, targets in tqdm(self.train_data):
             source = source.to('cuda:0')
             targets = targets.to('cuda:1')
@@ -181,6 +184,7 @@ def main():
     data_loader = DataLoader(dataset, batch_size=8, sampler=sampler)
     # model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
     model = models.resnet50()
+    print('model initialized')
     stage1 = nn.Sequential(
         model.conv1,
         model.bn1,
