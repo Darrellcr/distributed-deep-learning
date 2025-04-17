@@ -188,7 +188,7 @@ def main():
         transform=Normalize(),
     )
     sampler = DistributedSampler(dataset)
-    data_loader = DataLoader(dataset, batch_size=8, sampler=sampler)
+    data_loader = DataLoader(dataset, batch_size=8, sampler=sampler, drop_last=True)
     # model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
     model = models.resnet50()
     print('model initialized')
