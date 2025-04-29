@@ -217,7 +217,7 @@ def main():
         device_mesh=device_mesh,
         num_microbatches=4,
     )
-    trainer.train(max_epochs=1)
+    trainer.train(max_epochs=3)
 
     cleanup()
 
