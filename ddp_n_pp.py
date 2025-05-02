@@ -1,5 +1,6 @@
 import os
 import random
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -113,8 +114,6 @@ class Trainer:
             group=self.device_mesh['pp'].get_group(),
         )
 
-        # pp_size = self.device_mesh['pp'].size()
-        # loss_fn = F.cross_entropy if self.local_rank == 0 else None
         self.schedule = ScheduleGPipe(
             self.model_stage,
             n_microbatches=self.num_microbatches,
@@ -190,22 +189,27 @@ def main():
     sampler = DistributedSampler(dataset)
     data_loader = DataLoader(dataset, batch_size=8, sampler=sampler, drop_last=True)
     # model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-    model = models.resnet50()
+    model = models.densenet121()
     print('model initialized')
     stage1 = nn.Sequential(
-        model.conv1,
-        model.bn1,
-        model.relu,
-        model.maxpool,
-        model.layer1,
-        model.layer2,
+        model.features.conv0,
+        model.features.norm0,
+        model.features.relu0,
+        model.features.pool0,
+        model.features.denseblock1,
+        model.features.transition1,
+        model.features.denseblock2,
+        model.features.transition2,
     )
     stage2 = nn.Sequential(
-        model.layer3,
-        model.layer4,
-        model.avgpool,
+        model.features.denseblock3,
+        model.features.transition3,
+        model.features.denseblock4,
+        model.features.norm5,
+        nn.ReLU(inplace=True),
+        nn.AdaptiveAvgPool2d((1, 1)),
         nn.Flatten(),
-        model.fc,
+        model.classifier,
     )
     model_stages = [stage1, stage2]
     optimizers = [optim.Adam(stage.parameters()) for stage in model_stages]
@@ -217,7 +221,7 @@ def main():
         device_mesh=device_mesh,
         num_microbatches=4,
     )
-    trainer.train(max_epochs=3)
+    trainer.train(max_epochs=1)
 
     cleanup()
 
