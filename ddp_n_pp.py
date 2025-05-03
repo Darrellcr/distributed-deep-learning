@@ -143,9 +143,9 @@ class Trainer:
         if self.local_rank == 0:
             self.schedule.step(source)
         elif self.local_rank == len(self.model_stages) - 1:
-            loss = []
-            self.schedule.step(target=targets, loss=loss)
-            self._log_loss(loss)
+            losses = []
+            self.schedule.step(target=targets, losses=losses)
+            self._log_losses(losses)
         else:
             self.schedule.step()
 
@@ -174,12 +174,12 @@ class Trainer:
             # if self.local_rank == 0 and self.save_every != 0 and epoch % self.save_every == 0:
             #     self._save_snapshot(epoch)
 
-    def _log_loss(self, loss: List[float]):
+    def _log_losses(self, losses: List[float]):
         with open("/mnt/dcornelius/training_logs/loss.csv", "a") as f:
             writer = csv.writer(f)
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             job_id = os.getenv("TORCHX_JOB_ID", "local")
-            writer.writerow([now, job_id, self.global_rank, loss])
+            writer.writerow([now, job_id, self.global_rank, losses])
             
 
 def main():
