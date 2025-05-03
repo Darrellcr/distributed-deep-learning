@@ -104,14 +104,14 @@ class Trainer:
 
         self.model_stage = self.model_stages[self.local_rank]
         self.model_stage.to(self.device)
-        self.model_stage = DDP(self.model_stage, process_group=self.device_mesh.get_group('dp'))
+        self.model_stage = DDP(self.model_stage, process_group=self.device_mesh['dp'].get_group())
 
         self.model_stage = PipelineStage(
             self.model_stage,
             stage_index=self.local_rank,
             num_stages=len(self.model_stages),
             device=self.device,
-            group=self.device_mesh.get_group('pp'),
+            group=self.device_mesh['pp'].get_group(),
         )
 
         self.schedule = ScheduleGPipe(
