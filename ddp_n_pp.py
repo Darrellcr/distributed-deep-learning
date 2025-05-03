@@ -104,14 +104,14 @@ class Trainer:
 
         self.model_stage = self.model_stages[self.local_rank]
         self.model_stage.to(self.device)
-        self.model_stage = DDP(self.model_stage, process_group=self.device_mesh['dp'].get_group())
+        self.model_stage = DDP(self.model_stage, process_group=self.device_mesh.get_group('dp'))
 
         self.model_stage = PipelineStage(
             self.model_stage,
             stage_index=self.local_rank,
             num_stages=len(self.model_stages),
             device=self.device,
-            group=self.device_mesh['pp'].get_group(),
+            group=self.device_mesh.get_group('pp'),
         )
 
         self.schedule = ScheduleGPipe(
@@ -169,7 +169,11 @@ class Trainer:
 
             if self.local_rank == len(self.model_stages) - 1:
                 loss = torch.mean(torch.tensor(self.epoch_losses))
-                self._log_loss(loss, epoch)
+                dist.all_reduce(loss, op=dist.ReduceOp.AVG, group=self.device_mesh.get_group('pp'))
+                
+                if self.device_mesh.get_group('dp').rank() == 0:
+                    self._log_loss(loss, epoch)
+
                 self.epoch_losses = []
 
             # if self.local_rank == 0 and self.save_every != 0 and epoch % self.save_every == 0:
@@ -186,8 +190,6 @@ def main():
     device_mesh = setup()
     set_seed(42)
 
-    print(device_mesh.get_group('pp').rank())
-
     dataset = AptosDataset(
         csv_file="/mnt/dcornelius/preprocessed-aptos/train.csv",
         root_dir="/mnt/dcornelius/preprocessed-aptos/train_images",
@@ -198,39 +200,39 @@ def main():
     sampler = DistributedSampler(dataset)
     data_loader = DataLoader(dataset, batch_size=8, sampler=sampler, drop_last=True)
     # model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-    # model = models.densenet121()
-    # print('model initialized')
-    # stage1 = nn.Sequential(
-    #     model.features.conv0,
-    #     model.features.norm0,
-    #     model.features.relu0,
-    #     model.features.pool0,
-    #     model.features.denseblock1,
-    #     model.features.transition1,
-    #     model.features.denseblock2,
-    #     model.features.transition2,
-    # )
-    # stage2 = nn.Sequential(
-    #     model.features.denseblock3,
-    #     model.features.transition3,
-    #     model.features.denseblock4,
-    #     model.features.norm5,
-    #     nn.ReLU(inplace=True),
-    #     nn.AdaptiveAvgPool2d((1, 1)),
-    #     nn.Flatten(),
-    #     model.classifier,
-    # )
-    # model_stages = [stage1, stage2]
-    # optimizers = [optim.Adam(stage.parameters()) for stage in model_stages]
+    model = models.densenet121()
+    print('model initialized')
+    stage1 = nn.Sequential(
+        model.features.conv0,
+        model.features.norm0,
+        model.features.relu0,
+        model.features.pool0,
+        model.features.denseblock1,
+        model.features.transition1,
+        model.features.denseblock2,
+        model.features.transition2,
+    )
+    stage2 = nn.Sequential(
+        model.features.denseblock3,
+        model.features.transition3,
+        model.features.denseblock4,
+        model.features.norm5,
+        nn.ReLU(inplace=True),
+        nn.AdaptiveAvgPool2d((1, 1)),
+        nn.Flatten(),
+        model.classifier,
+    )
+    model_stages = [stage1, stage2]
+    optimizers = [optim.Adam(stage.parameters()) for stage in model_stages]
 
-    # trainer = Trainer(
-    #     model_stages=model_stages,
-    #     train_data=data_loader,
-    #     optimizers=optimizers,
-    #     device_mesh=device_mesh,
-    #     num_microbatches=4,
-    # )
-    # trainer.train(max_epochs=4)
+    trainer = Trainer(
+        model_stages=model_stages,
+        train_data=data_loader,
+        optimizers=optimizers,
+        device_mesh=device_mesh,
+        num_microbatches=4,
+    )
+    trainer.train(max_epochs=2)
 
     cleanup()
 
