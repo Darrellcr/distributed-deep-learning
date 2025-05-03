@@ -17,15 +17,14 @@ if torch.cuda.is_available():
 else:
     device = torch.device("cpu")
 
-print(os.environ)
-
 print(f"I am worker {dist.get_rank()} of {dist.get_world_size()} on {device}!")
 device_name = torch.cuda.get_device_name(dist.get_rank() % torch.cuda.device_count())
 print(device_name)
 
 # Create a tensor on GPU and perform all_reduce
 a = torch.tensor([dist.get_rank()], device=device)
-dist.all_reduce(a, group=device_mesh.get_group("pp"))
+print(device_mesh['pp'])
+dist.all_reduce(a, group=device_mesh.get_group("dp"))
 print(f"all_reduce output (on {device}) = {a.item()}")
 
 dist.destroy_process_group()

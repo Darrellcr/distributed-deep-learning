@@ -171,7 +171,7 @@ class Trainer:
 
             if self.local_rank == len(self.model_stages) - 1:
                 loss = torch.mean(torch.tensor(self.epoch_losses, device=self.device))
-                dist.all_reduce(loss, op=dist.ReduceOp.AVG, group=self.device_mesh.get_group('pp'))
+                dist.all_reduce(loss, op=dist.ReduceOp.AVG, group=self.device_mesh['dp'].get_group())
                 
                 if self.device_mesh.get_group('dp').rank() == 0:
                     self._log_loss(loss, epoch)
