@@ -93,6 +93,7 @@ class Trainer:
         self.device_mesh = device_mesh
         self.save_every = save_every
         self.epochs_run = 0
+        self.epoch_losses= []
         self.snapshot_path = snapshot_path
         self.num_microbatches = num_microbatches
         if os.path.exists(snapshot_path):
@@ -117,7 +118,6 @@ class Trainer:
             loss_fn=F.cross_entropy,
         )
 
-        self.best_qwk = 0
 
     def _load_snapshot(self, snapshot_path):
         loc = f"cuda:{self.local_rank}"
@@ -145,7 +145,7 @@ class Trainer:
         elif self.local_rank == len(self.model_stages) - 1:
             losses = []
             self.schedule.step(target=targets, losses=losses)
-            self._log_losses(losses)
+            self.epoch_losses.append(losses)
         else:
             self.schedule.step()
 
@@ -171,15 +171,20 @@ class Trainer:
     def train(self, max_epochs: int):
         for epoch in range(self.epochs_run, max_epochs):
             self._run_epoch(epoch)
+
+            if self.local_rank == len(self.model_stages) - 1:
+                loss = torch.mean(torch.tensor(self.epoch_losses))
+                self._log_loss(loss)
+                
             # if self.local_rank == 0 and self.save_every != 0 and epoch % self.save_every == 0:
             #     self._save_snapshot(epoch)
 
-    def _log_losses(self, losses: List[float]):
+    def _log_loss(self, loss):
         with open("/mnt/dcornelius/training_logs/loss.csv", "a") as f:
             writer = csv.writer(f)
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             job_id = os.getenv("TORCHX_JOB_ID", "local")
-            writer.writerow([now, job_id, self.global_rank, losses])
+            writer.writerow([now, job_id, self.global_rank, self.local_rank, loss])
             
 
 def main():
