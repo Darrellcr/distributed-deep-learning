@@ -1,6 +1,9 @@
+import csv
+from datetime import datetime
 import os
 import random
-from typing import Optional
+from typing import List
+
 
 import numpy as np
 import pandas as pd
@@ -171,8 +174,13 @@ class Trainer:
             # if self.local_rank == 0 and self.save_every != 0 and epoch % self.save_every == 0:
             #     self._save_snapshot(epoch)
 
-    
-
+    def _log_loss(self, loss: List[float]):
+        with open("/mnt/dcornelius/training_logs/loss.csv", "a") as f:
+            writer = csv.writer(f)
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            job_id = os.getenv("TORCHX_JOB_ID", "local")
+            writer.writerow([now, job_id, self.global_rank, loss])
+            
 
 def main():
     device_mesh = setup()
