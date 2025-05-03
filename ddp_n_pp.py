@@ -93,7 +93,7 @@ class Trainer:
         self.device_mesh = device_mesh
         self.save_every = save_every
         self.epochs_run = 0
-        self.epoch_losses= []
+        self.epoch_losses = []
         self.snapshot_path = snapshot_path
         self.num_microbatches = num_microbatches
         if os.path.exists(snapshot_path):
@@ -175,7 +175,8 @@ class Trainer:
             if self.local_rank == len(self.model_stages) - 1:
                 loss = torch.mean(torch.tensor(self.epoch_losses))
                 self._log_loss(loss)
-                
+                self.epoch_losses = []
+
             # if self.local_rank == 0 and self.save_every != 0 and epoch % self.save_every == 0:
             #     self._save_snapshot(epoch)
 
