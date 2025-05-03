@@ -186,8 +186,7 @@ def main():
     device_mesh = setup()
     set_seed(42)
 
-    print(device_mesh['dp'].get_group())
-    return
+    print(f"{device_mesh['dp'].get_group()}")
 
     dataset = AptosDataset(
         csv_file="/mnt/dcornelius/preprocessed-aptos/train.csv",
@@ -199,39 +198,39 @@ def main():
     sampler = DistributedSampler(dataset)
     data_loader = DataLoader(dataset, batch_size=8, sampler=sampler, drop_last=True)
     # model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-    model = models.densenet121()
-    print('model initialized')
-    stage1 = nn.Sequential(
-        model.features.conv0,
-        model.features.norm0,
-        model.features.relu0,
-        model.features.pool0,
-        model.features.denseblock1,
-        model.features.transition1,
-        model.features.denseblock2,
-        model.features.transition2,
-    )
-    stage2 = nn.Sequential(
-        model.features.denseblock3,
-        model.features.transition3,
-        model.features.denseblock4,
-        model.features.norm5,
-        nn.ReLU(inplace=True),
-        nn.AdaptiveAvgPool2d((1, 1)),
-        nn.Flatten(),
-        model.classifier,
-    )
-    model_stages = [stage1, stage2]
-    optimizers = [optim.Adam(stage.parameters()) for stage in model_stages]
+    # model = models.densenet121()
+    # print('model initialized')
+    # stage1 = nn.Sequential(
+    #     model.features.conv0,
+    #     model.features.norm0,
+    #     model.features.relu0,
+    #     model.features.pool0,
+    #     model.features.denseblock1,
+    #     model.features.transition1,
+    #     model.features.denseblock2,
+    #     model.features.transition2,
+    # )
+    # stage2 = nn.Sequential(
+    #     model.features.denseblock3,
+    #     model.features.transition3,
+    #     model.features.denseblock4,
+    #     model.features.norm5,
+    #     nn.ReLU(inplace=True),
+    #     nn.AdaptiveAvgPool2d((1, 1)),
+    #     nn.Flatten(),
+    #     model.classifier,
+    # )
+    # model_stages = [stage1, stage2]
+    # optimizers = [optim.Adam(stage.parameters()) for stage in model_stages]
 
-    trainer = Trainer(
-        model_stages=model_stages,
-        train_data=data_loader,
-        optimizers=optimizers,
-        device_mesh=device_mesh,
-        num_microbatches=4,
-    )
-    trainer.train(max_epochs=4)
+    # trainer = Trainer(
+    #     model_stages=model_stages,
+    #     train_data=data_loader,
+    #     optimizers=optimizers,
+    #     device_mesh=device_mesh,
+    #     num_microbatches=4,
+    # )
+    # trainer.train(max_epochs=4)
 
     cleanup()
 
