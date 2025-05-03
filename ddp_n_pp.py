@@ -145,7 +145,7 @@ class Trainer:
         elif self.local_rank == len(self.model_stages) - 1:
             loss = []
             self.schedule.step(target=targets, loss=loss)
-            print(f"[GPU{self.global_rank}] Loss: {loss}")
+            self._log_loss(loss)
         else:
             self.schedule.step()
 
