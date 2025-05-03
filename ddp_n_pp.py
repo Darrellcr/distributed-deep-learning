@@ -92,7 +92,8 @@ class Trainer:
 
         self.model_stages = model_stages
         self.train_data: DataLoader[torch.Tensor] = train_data
-        self.optimizer = optimizers[self.local_rank]
+        # self.optimizer = optimizers[self.local_rank]
+        self.optimizers = optimizers
         self.save_every = save_every
         self.epochs_run = 0
         self.epoch_losses = []
@@ -137,7 +138,9 @@ class Trainer:
             f"Epoch {epoch} | Training snapshot saved at {self.snapshot_path}")
 
     def _run_batch(self, source, targets):
-        self.optimizer.zero_grad()
+        for optimizer in self.optimizers:
+            optimizer.zero_grad()
+        # self.optimizer.zero_grad()
 
         if self.local_rank == 0:
             self.schedule.step(source)
@@ -151,7 +154,9 @@ class Trainer:
         # loss = F.cross_entropy(output, targets)
         # loss.backward()
         
-        self.optimizer.step()
+        # self.optimizer.step()
+        for optimizer in self.optimizers:
+            optimizer.step()
 
     def _run_epoch(self, epoch):
         b_sz = len(next(iter(self.train_data))[0])
