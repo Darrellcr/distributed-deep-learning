@@ -114,6 +114,8 @@ class Trainer:
             loss_fn=F.cross_entropy,
         )
 
+        self.best_qwk = 0
+
     def _load_snapshot(self, snapshot_path):
         loc = f"cuda:{self.local_rank}"
         snapshot = torch.load(snapshot_path, map_location=loc)
@@ -138,7 +140,9 @@ class Trainer:
         if self.local_rank == 0:
             self.schedule.step(source)
         elif self.local_rank == len(self.model_stages) - 1:
-            self.schedule.step(target=targets)
+            loss = []
+            self.schedule.step(target=targets, loss=loss)
+            print(f"[GPU{self.global_rank}] Loss: {loss}")
         else:
             self.schedule.step()
 
@@ -166,6 +170,8 @@ class Trainer:
             self._run_epoch(epoch)
             # if self.local_rank == 0 and self.save_every != 0 and epoch % self.save_every == 0:
             #     self._save_snapshot(epoch)
+
+    
 
 
 def main():
@@ -214,7 +220,7 @@ def main():
         device_mesh=device_mesh,
         num_microbatches=4,
     )
-    trainer.train(max_epochs=1)
+    trainer.train(max_epochs=4)
 
     cleanup()
 
