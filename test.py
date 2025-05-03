@@ -2,9 +2,14 @@ import os
 
 import torch
 import torch.distributed as dist
+from torch.distributed.device_mesh import init_device_mesh, DeviceMesh
 
 # Initialize process group
 dist.init_process_group(backend="nccl")  # Use "nccl" for GPUs
+device_mesh = init_device_mesh(
+    "cuda", mesh_shape=(3, 2), mesh_dim_names=("dp", "pp")
+)  # Initialize device mesh
+
 
 # Check GPU availability
 if torch.cuda.is_available():
@@ -20,7 +25,7 @@ print(device_name)
 
 # Create a tensor on GPU and perform all_reduce
 a = torch.tensor([dist.get_rank()], device=device)
-dist.all_reduce(a)
+dist.all_reduce(a, group=device_mesh.get_group("pp"))
 print(f"all_reduce output (on {device}) = {a.item()}")
 
 dist.destroy_process_group()
