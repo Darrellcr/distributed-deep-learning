@@ -84,13 +84,15 @@ class Trainer:
         save_every: int = 0,
         snapshot_path: str = '',
     ) -> None:
+        self.job_id = os.getenv("TORCHX_JOB_ID", "local")
         self.global_rank = dist.get_rank()
         self.local_rank = self.global_rank % torch.cuda.device_count()
         self.device = torch.device(f'cuda:{self.local_rank}')
+        self.device_mesh = device_mesh
+
         self.model_stages = model_stages
         self.train_data: DataLoader[torch.Tensor] = train_data
         self.optimizers = optimizers
-        self.device_mesh = device_mesh
         self.save_every = save_every
         self.epochs_run = 0
         self.epoch_losses = []
@@ -174,7 +176,7 @@ class Trainer:
 
             if self.local_rank == len(self.model_stages) - 1:
                 loss = torch.mean(torch.tensor(self.epoch_losses))
-                self._log_loss(loss)
+                self._log_loss(loss, epoch)
                 self.epoch_losses = []
 
             # if self.local_rank == 0 and self.save_every != 0 and epoch % self.save_every == 0:
@@ -184,8 +186,7 @@ class Trainer:
         with open("/mnt/dcornelius/training_logs/loss.csv", "a") as f:
             writer = csv.writer(f)
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            job_id = os.getenv("TORCHX_JOB_ID", "local")
-            writer.writerow([now, job_id, self.global_rank, self.local_rank, epoch, loss])
+            writer.writerow([now, self.job_id, self.global_rank, self.local_rank, epoch, loss])
             
 
 def main():
