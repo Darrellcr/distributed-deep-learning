@@ -92,7 +92,7 @@ class Trainer:
 
         self.model_stages = model_stages
         self.train_data: DataLoader[torch.Tensor] = train_data
-        self.optimizers = optimizers
+        self.optimizer = optimizers[self.local_rank]
         self.save_every = save_every
         self.epochs_run = 0
         self.epoch_losses = []
@@ -120,7 +120,6 @@ class Trainer:
             loss_fn=F.cross_entropy,
         )
 
-
     def _load_snapshot(self, snapshot_path):
         loc = f"cuda:{self.local_rank}"
         snapshot = torch.load(snapshot_path, map_location=loc)
@@ -138,9 +137,7 @@ class Trainer:
             f"Epoch {epoch} | Training snapshot saved at {self.snapshot_path}")
 
     def _run_batch(self, source, targets):
-        # self.optimizer.zero_grad()
-        for optimizer in self.optimizers:
-            optimizer.zero_grad()
+        self.optimizer.zero_grad()
 
         if self.local_rank == 0:
             self.schedule.step(source)
@@ -154,9 +151,7 @@ class Trainer:
         # loss = F.cross_entropy(output, targets)
         # loss.backward()
         
-        # self.optimizer.step()
-        for optimizer in self.optimizers:
-            optimizer.step()
+        self.optimizer.step()
 
     def _run_epoch(self, epoch):
         b_sz = len(next(iter(self.train_data))[0])
@@ -164,8 +159,6 @@ class Trainer:
         print(f"[GPU{self.global_rank}] Starting Epoch {epoch}")
         print('batch size:', b_sz)
         for source, targets in self.train_data:
-            source = source.to('cuda:0')
-            targets = targets.to('cuda:1')
             self._run_batch(source, targets)
         print(
             f"[GPU{self.global_rank}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
@@ -192,6 +185,9 @@ class Trainer:
 def main():
     device_mesh = setup()
     set_seed(42)
+
+    print(device_mesh['dp'].get_group())
+    return
 
     dataset = AptosDataset(
         csv_file="/mnt/dcornelius/preprocessed-aptos/train.csv",
