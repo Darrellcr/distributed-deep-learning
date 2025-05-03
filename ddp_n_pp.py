@@ -161,7 +161,7 @@ class Trainer:
         self.train_data.sampler.set_epoch(epoch)
         print(f"[GPU{self.global_rank}] Starting Epoch {epoch}")
         print('batch size:', b_sz)
-        for source, targets in tqdm(self.train_data):
+        for source, targets in self.train_data:
             source = source.to('cuda:0')
             targets = targets.to('cuda:1')
             self._run_batch(source, targets)
@@ -180,12 +180,12 @@ class Trainer:
             # if self.local_rank == 0 and self.save_every != 0 and epoch % self.save_every == 0:
             #     self._save_snapshot(epoch)
 
-    def _log_loss(self, loss):
+    def _log_loss(self, loss, epoch):
         with open("/mnt/dcornelius/training_logs/loss.csv", "a") as f:
             writer = csv.writer(f)
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             job_id = os.getenv("TORCHX_JOB_ID", "local")
-            writer.writerow([now, job_id, self.global_rank, self.local_rank, loss])
+            writer.writerow([now, job_id, self.global_rank, self.local_rank, epoch, loss])
             
 
 def main():
