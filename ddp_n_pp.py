@@ -186,7 +186,7 @@ def main():
     device_mesh = setup()
     set_seed(42)
 
-    print(device_mesh.get_group('dp').rank())
+    print(device_mesh.get_group('tp').rank())
 
     dataset = AptosDataset(
         csv_file="/mnt/dcornelius/preprocessed-aptos/train.csv",
