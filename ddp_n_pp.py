@@ -104,14 +104,14 @@ class Trainer:
 
         self.model_stage = self.model_stages[self.local_rank]
         self.model_stage.to(self.device)
-        self.model_stage = DDP(self.model_stage, process_group=self.device_mesh['dp'].get_group())
+        self.model_stage = DDP(self.model_stage, process_group=self.device_mesh.get_group('dp'))
 
         self.model_stage = PipelineStage(
             self.model_stage,
             stage_index=self.local_rank,
             num_stages=len(self.model_stages),
             device=self.device,
-            group=self.device_mesh['pp'].get_group(),
+            group=self.device_mesh.get_group('pp'),
         )
 
         self.schedule = ScheduleGPipe(
@@ -170,7 +170,7 @@ class Trainer:
             self._run_epoch(epoch)
 
             if self.local_rank == len(self.model_stages) - 1:
-                loss = torch.mean(torch.tensor(self.epoch_losses))
+                loss = torch.mean(torch.tensor(self.epoch_losses)).to(self.device)
                 dist.all_reduce(loss, op=dist.ReduceOp.AVG, group=self.device_mesh.get_group('pp'))
                 
                 if self.device_mesh.get_group('dp').rank() == 0:
