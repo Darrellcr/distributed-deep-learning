@@ -23,8 +23,8 @@ print(device_name)
 
 # Create a tensor on GPU and perform all_reduce
 a = torch.tensor([dist.get_rank()], device=device)
-print(device_mesh['pp'])
-dist.all_reduce(a, group=device_mesh.get_group("dp"))
+print(device_mesh['dp'])
+dist.all_reduce(a, group=device_mesh.get_group("pp"))
 print(f"all_reduce output (on {device}) = {a.item()}")
 
 dist.destroy_process_group()
