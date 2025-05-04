@@ -173,7 +173,7 @@ class Trainer:
                 loss = torch.mean(torch.tensor(self.epoch_losses, device=self.device))
                 dist.all_reduce(loss, op=dist.ReduceOp.AVG, group=self.device_mesh.get_group('dp'))
                 
-                if self.device_mesh.get_group('dp').rank() == 0:
+                if self.device_mesh.get_group('dp').rank() == 1:
                     self._log_loss(loss, epoch)
 
                 self.epoch_losses = []
@@ -234,7 +234,7 @@ def main():
         device_mesh=device_mesh,
         num_microbatches=4,
     )
-    trainer.train(max_epochs=2)
+    trainer.train(max_epochs=10)
 
     cleanup()
 
