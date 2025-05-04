@@ -1,0 +1,227 @@
+import csv
+from datetime import datetime
+import os
+import random
+
+import numpy as np
+import pandas as pd
+import torch
+from torch import optim, nn
+import torch.distributed as dist
+from torch.distributed.pipelining import ScheduleGPipe, PipelineStage
+from torch.nn import functional as F
+from torch.utils.data import Dataset, DataLoader
+from torchvision import models, io
+
+
+def setup():
+    dist.init_process_group(backend='nccl')
+    local_rank = dist.get_rank() % torch.cuda.device_count()
+    torch.cuda.set_device(local_rank)
+
+
+def cleanup():
+    dist.destroy_process_group()
+
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = True
+
+
+class Normalize:
+    def __call__(self, img):
+        img = img / 255.
+
+        return img.float()
+
+
+class AptosDataset(Dataset):
+    def __init__(self, csv_file, root_dir, filename_col, label_col='diagnosis', transform=None):
+        self.metadata = pd.read_csv(csv_file)
+        self.root_dir = root_dir
+        self.filename_col = filename_col
+        self.label_col = label_col
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.metadata)
+
+    def __getitem__(self, idx):
+        img_name = str(self.metadata.loc[idx, self.filename_col])
+        img_path = os.path.join(self.root_dir, img_name + '.png')
+        image = io.read_image(img_path)
+        if self.transform:
+            image = self.transform(image)
+
+        label = self.metadata.loc[idx, self.label_col]
+
+        return image, label
+    
+
+class Trainer:
+    def __init__(
+        self,
+        model_stages: list[torch.nn.Module],
+        train_data: DataLoader,
+        optimizers: list[torch.optim.Optimizer],
+        num_microbatches: int = 4,
+        save_every: int = 0,
+        snapshot_path: str = '',
+    ) -> None:
+        self.job_id = os.getenv("TORCHX_JOB_ID", "local")
+        self.global_rank = dist.get_rank()
+        self.local_rank = self.global_rank % torch.cuda.device_count()
+        self.device = torch.device(f'cuda:{self.local_rank}')
+
+        self.model_stages = model_stages
+        self.train_data: DataLoader[torch.Tensor] = train_data
+        self.optimizer = optimizers[self.local_rank]
+        self.save_every = save_every
+        self.epochs_run = 0
+        self.epoch_losses = []
+        self.snapshot_path = snapshot_path
+        self.num_microbatches = num_microbatches
+        if os.path.exists(snapshot_path):
+            print("Loading snapshot")
+            self._load_snapshot(snapshot_path)
+
+        self.model_stage = self.model_stages[self.local_rank]
+        self.model_stage.to(self.device)
+
+        self.model_stage = PipelineStage(
+            self.model_stage,
+            stage_index=self.local_rank,
+            num_stages=len(self.model_stages),
+            device=self.device,
+        )
+
+        self.schedule = ScheduleGPipe(
+            self.model_stage,
+            n_microbatches=self.num_microbatches,
+            loss_fn=F.cross_entropy,
+        )
+
+    def _load_snapshot(self, snapshot_path):
+        loc = f"cuda:{self.local_rank}"
+        snapshot = torch.load(snapshot_path, map_location=loc)
+        self.model.load_state_dict(snapshot["MODEL_STATE"])
+        self.epochs_run = snapshot["EPOCHS_RUN"]
+        print(f"Resuming training from snapshot at Epoch {self.epochs_run}")
+
+    def _save_snapshot(self, epoch):
+        snapshot = {
+            "MODEL_STATE": self.model.module.state_dict(),
+            "EPOCHS_RUN": epoch,
+        }
+        torch.save(snapshot, self.snapshot_path)
+        print(
+            f"Epoch {epoch} | Training snapshot saved at {self.snapshot_path}")
+
+    def _run_batch(self, source, targets):
+        self.optimizer.zero_grad()
+
+        if self.local_rank == 0:
+            self.schedule.step(source)
+        elif self.local_rank == len(self.model_stages) - 1:
+            losses = []
+            self.schedule.step(target=targets, losses=losses)
+            self.epoch_losses.append(losses)
+        else:
+            self.schedule.step()
+
+        # loss = F.cross_entropy(output, targets)
+        # loss.backward()
+        
+        self.optimizer.step()
+
+    def _run_epoch(self, epoch):
+        b_sz = len(next(iter(self.train_data))[0])
+        self.train_data.sampler.set_epoch(epoch)
+        print(f"[GPU{self.global_rank}] Starting Epoch {epoch}")
+        print('batch size:', b_sz)
+        for source, targets in self.train_data:
+            source = source.to('cuda:0')
+            targets = targets.to(f'cuda:{torch.cuda.device_count() - 1}')
+            self._run_batch(source, targets)
+        print(
+            f"[GPU{self.global_rank}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
+    
+    def train(self, max_epochs: int):
+        for epoch in range(self.epochs_run, max_epochs):
+            self._run_epoch(epoch)
+
+            if self.local_rank == len(self.model_stages) - 1:
+                loss = torch.mean(torch.tensor(self.epoch_losses, device=self.device))
+                dist.all_reduce(loss, op=dist.ReduceOp.AVG, group=self.device_mesh.get_group('dp'))
+                
+                if self.device_mesh.get_group('dp').rank() == 1:
+                    self._log_loss(loss, epoch)
+
+                self.epoch_losses = []
+
+            # if self.local_rank == 0 and self.save_every != 0 and epoch % self.save_every == 0:
+            #     self._save_snapshot(epoch)
+
+    def _log_loss(self, loss, epoch):
+        with open("/mnt/dcornelius/training_logs/loss.csv", "a") as f:
+            writer = csv.writer(f)
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            writer.writerow([now, self.job_id, self.global_rank, self.local_rank, epoch, loss])
+            
+
+def main():
+    setup()
+    seed = 42
+    set_seed(seed)
+
+    dataset = AptosDataset(
+        csv_file="/mnt/dcornelius/preprocessed-aptos/train.csv",
+        root_dir="/mnt/dcornelius/preprocessed-aptos/train_images",
+        filename_col="new_id_code",
+        label_col="diagnosis",
+        transform=Normalize(),
+    )
+    g = torch.Generator()
+    g.manual_seed(seed)
+    data_loader = DataLoader(dataset, batch_size=16, drop_last=True, shuffle=True, generator=g)
+
+    model = models.densenet121()
+    print("model initialized")
+    stage1 = nn.Sequential(
+        model.features.conv0,
+        model.features.norm0,
+        model.features.relu0,
+        model.features.pool0,
+        model.features.denseblock1,
+        model.features.transition1,
+        model.features.denseblock2,
+        model.features.transition2,
+    )
+    stage2 = nn.Sequential(
+        model.features.denseblock3,
+        model.features.transition3,
+        model.features.denseblock4,
+        model.features.norm5,
+        nn.ReLU(inplace=True),
+        nn.AdaptiveAvgPool2d((1, 1)),
+        nn.Flatten(),
+        model.classifier,
+    )
+    model_stages = [stage1, stage2]
+    optimizers = [optim.Adam(stage.parameters()) for stage in model_stages]
+
+    trainer = Trainer(
+        model_stages=model_stages,
+        train_data=data_loader,
+        optimizers=optimizers,
+        num_microbatches=4,
+    )
+    trainer.train(max_epochs=3)
+
+    cleanup()
