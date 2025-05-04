@@ -225,3 +225,7 @@ def main():
     trainer.train(max_epochs=3)
 
     cleanup()
+
+
+if __name__ == "__main__":
+    main()
