@@ -119,11 +119,11 @@ class Trainer:
         self.num_microbatches = num_microbatches
 
         self.model_stage = self.model_stages[self.local_rank]
+        self.model_stage.to(self.device)
+        self.optimizer: optim.Optimizer = OptimizerClass(self.model_stage.parameters())
         if os.path.exists(snapshot_path):
             print("Loading snapshot")
             self._load_snapshot(snapshot_path)
-        self.model_stage.to(self.device)
-        self.optimizer: optim.Optimizer = OptimizerClass(self.model_stage.parameters())
 
         self.pipeline_stage = PipelineStage(
             self.model_stage,
