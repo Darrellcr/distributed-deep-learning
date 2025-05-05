@@ -241,15 +241,14 @@ def main():
     )
     model_stages = [stage1, stage2]
     # optimizers = [optim.Adam(stage.parameters()) for stage in model_stages]
-    OptimizerClass = optim.Adam
 
     trainer = Trainer(
         model_stages=model_stages,
         train_data=data_loader,
-        OptimizerClass=OptimizerClass,
+        OptimizerClass=optim.Adam,
         num_microbatches=4,
         save_every=2,
-        snapshot_path=f"{CHECKPOINT_DIR}/pp-jmmpkdf2p4x3bd/epoch_2",
+        # snapshot_path=f"{CHECKPOINT_DIR}/pp-jmmpkdf2p4x3bd/epoch_2",
     )
     trainer.train(max_epochs=3)
 
