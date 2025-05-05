@@ -105,7 +105,7 @@ class Trainer:
         save_every: int = 0,
         snapshot_path: str = '',
     ) -> None:
-        self.job_id = os.getenv("TORCHX_JOB_ID", "local")
+        self.job_id = os.getenv("TORCHX_JOB_ID", "local").split("/")[-1]
         self.global_rank = dist.get_rank()
         self.local_rank = self.global_rank % torch.cuda.device_count()
         self.device = torch.device(f'cuda:{self.local_rank}')
