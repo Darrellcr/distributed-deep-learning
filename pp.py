@@ -246,7 +246,7 @@ def main():
         train_data=data_loader,
         num_microbatches=4,
         save_every=2,
-        # snapshot_path=f"{CHECKPOINT_DIR}/pp-kds307w3m93dd/epoch_2",
+        snapshot_path=f"{CHECKPOINT_DIR}/pp-zxzlrhjs3p7gpd/epoch_2",
     )
     trainer.train(max_epochs=3)
 
