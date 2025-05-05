@@ -188,7 +188,7 @@ class Trainer:
 
                 self.epoch_losses = []
 
-            if self.save_every != 0 and epoch % self.save_every == 0:
+            if self.save_every != 0 and epoch != 0 and epoch % self.save_every == 0:
                 self._save_snapshot(epoch)
 
     def _log_loss(self, loss, epoch):
@@ -245,6 +245,7 @@ def main():
         optimizers=optimizers,
         num_microbatches=4,
         save_every=2,
+        snapshot_path=f"{CHECKPOINT_DIR}/pp-jmmpkdf2p4x3bd/epoch_2",
     )
     trainer.train(max_epochs=3)
 
