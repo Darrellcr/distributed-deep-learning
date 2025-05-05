@@ -248,7 +248,7 @@ def main():
         OptimizerClass=optim.Adam,
         num_microbatches=4,
         save_every=2,
-        # snapshot_path=f"{CHECKPOINT_DIR}/pp-jmmpkdf2p4x3bd/epoch_2",
+        snapshot_path=f"{CHECKPOINT_DIR}/pp-pmjwc5q4prltlc/epoch_2",
     )
     trainer.train(max_epochs=3)
 
