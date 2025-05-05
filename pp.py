@@ -141,6 +141,8 @@ class Trainer:
     def _load_snapshot(self, snapshot_path):
         state_dict = {"app": AppState(self.epochs_run, self.model_stage, self.optimizer)}
         dcp.load(state_dict, checkpoint_id=snapshot_path)
+        self.epochs_run = state_dict["app"].epoch
+        
         print(f"Resuming training from snapshot at Epoch {self.epochs_run}")
 
     def _save_snapshot(self, epoch: int):
@@ -245,7 +247,7 @@ def main():
         optimizers=optimizers,
         num_microbatches=4,
         save_every=2,
-        snapshot_path=f"{CHECKPOINT_DIR}/pp-jmmpkdf2p4x3bd/epoch_2",
+        # snapshot_path=f"{CHECKPOINT_DIR}/pp-jmmpkdf2p4x3bd/epoch_2",
     )
     trainer.train(max_epochs=3)
 
