@@ -2,16 +2,23 @@ import csv
 from datetime import datetime
 import os
 import random
+from typing import Union, Iterable
 
 import numpy as np
 import pandas as pd
 import torch
 from torch import optim, nn
 import torch.distributed as dist
+import torch.distributed.checkpoint as dcp
+from torch.distributed.checkpoint.stateful import Stateful
+from torch.distributed.checkpoint.state_dict import get_state_dict, set_state_dict
 from torch.distributed.pipelining import ScheduleGPipe, PipelineStage
 from torch.nn import functional as F
 from torch.utils.data import Dataset, DataLoader
 from torchvision import models, io
+
+
+CHECKPOINT_DIR = "/mnt/dcornelius/checkpoints/pp"
 
 
 def setup():
@@ -62,6 +69,30 @@ class AptosDataset(Dataset):
         label = self.metadata.loc[idx, self.label_col]
 
         return image, label
+
+
+class AppState(Stateful):
+    def __init__(self, epoch: int, model: nn.Module, optimizer: Union[torch.optim.Optimizer, Iterable[torch.optim.Optimizer]] = None):
+        self.epoch = epoch
+        self.model = model
+        self.optimizer = optimizer
+
+    def state_dict(self):
+        model_state_dict, optimizer_state_dict = get_state_dict(self.model, self.optimizer)
+        return {
+            "model": model_state_dict,
+            "optim": optimizer_state_dict,
+            "epoch": torch.tensor(self.epoch),
+        }
+
+    def load_state_dict(self, state_dict):
+        set_state_dict(
+            self.model,
+            self.optimizer,
+            model_state_dict=state_dict["model"],
+            optim_state_dict=state_dict["optim"]
+        )
+        self.epoch = state_dict["epoch"].item()
     
 
 class Trainer:
@@ -87,14 +118,14 @@ class Trainer:
         self.epoch_losses = []
         self.snapshot_path = snapshot_path
         self.num_microbatches = num_microbatches
+
+        self.model_stage = self.model_stages[self.local_rank]
         if os.path.exists(snapshot_path):
             print("Loading snapshot")
             self._load_snapshot(snapshot_path)
-
-        self.model_stage = self.model_stages[self.local_rank]
         self.model_stage.to(self.device)
 
-        self.model_stage = PipelineStage(
+        self.pipeline_stage = PipelineStage(
             self.model_stage,
             stage_index=self.local_rank,
             num_stages=len(self.model_stages),
@@ -102,24 +133,23 @@ class Trainer:
         )
 
         self.schedule = ScheduleGPipe(
-            self.model_stage,
+            self.pipeline_stage,
             n_microbatches=self.num_microbatches,
             loss_fn=F.cross_entropy,
         )
 
     def _load_snapshot(self, snapshot_path):
-        loc = f"cuda:{self.local_rank}"
-        snapshot = torch.load(snapshot_path, map_location=loc)
-        self.model.load_state_dict(snapshot["MODEL_STATE"])
-        self.epochs_run = snapshot["EPOCHS_RUN"]
+        state_dict = {"app": AppState(self.epochs_run, self.model_stage, self.optimizer)}
+        dcp.load(state_dict, checkpoint_id=snapshot_path)
         print(f"Resuming training from snapshot at Epoch {self.epochs_run}")
 
-    def _save_snapshot(self, epoch):
-        snapshot = {
-            "MODEL_STATE": self.model.module.state_dict(),
-            "EPOCHS_RUN": epoch,
-        }
-        torch.save(snapshot, self.snapshot_path)
+    def _save_snapshot(self, epoch: int, model: nn.Module, optimizer: Union[torch.optim.Optimizer, Iterable[torch.optim.Optimizer]]):
+        state_dict = {"app": AppState(epoch, model, optimizer)}
+        save_path = CHECKPOINT_DIR + f"/{self.job_id}/epoch_{epoch}"
+        os.makedirs(save_path, exist_ok=True)
+
+        dcp.save(state_dict, checkpoint_id=save_path)
+
         print(
             f"Epoch {epoch} | Training snapshot saved at {self.snapshot_path}")
 
@@ -135,9 +165,6 @@ class Trainer:
         else:
             self.schedule.step()
 
-        # loss = F.cross_entropy(output, targets)
-        # loss.backward()
-        
         self.optimizer.step()
 
     def _run_epoch(self, epoch):
@@ -161,8 +188,8 @@ class Trainer:
 
                 self.epoch_losses = []
 
-            # if self.local_rank == 0 and self.save_every != 0 and epoch % self.save_every == 0:
-            #     self._save_snapshot(epoch)
+            if self.save_every != 0 and epoch % self.save_every == 0:
+                self._save_snapshot(epoch)
 
     def _log_loss(self, loss, epoch):
         with open("/mnt/dcornelius/training_logs/loss.csv", "a") as f:
@@ -217,6 +244,7 @@ def main():
         train_data=data_loader,
         optimizers=optimizers,
         num_microbatches=4,
+        save_every=2,
     )
     trainer.train(max_epochs=3)
 
