@@ -143,8 +143,8 @@ class Trainer:
         dcp.load(state_dict, checkpoint_id=snapshot_path)
         print(f"Resuming training from snapshot at Epoch {self.epochs_run}")
 
-    def _save_snapshot(self, epoch: int, model: nn.Module, optimizer: Union[torch.optim.Optimizer, Iterable[torch.optim.Optimizer]]):
-        state_dict = {"app": AppState(epoch, model, optimizer)}
+    def _save_snapshot(self, epoch: int):
+        state_dict = {"app": AppState(epoch, self.model_stage, self.optimizer)}
         save_path = CHECKPOINT_DIR + f"/{self.job_id}/epoch_{epoch}"
         os.makedirs(save_path, exist_ok=True)
 
