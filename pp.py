@@ -100,7 +100,6 @@ class Trainer:
         self,
         model_stages: list[torch.nn.Module],
         train_data: DataLoader,
-        OptimizerClass: optim.Optimizer,
         num_microbatches: int = 4,
         save_every: int = 0,
         snapshot_path: str = '',
@@ -120,7 +119,7 @@ class Trainer:
 
         self.model_stage = self.model_stages[self.local_rank]
         self.model_stage.to(self.device)
-        self.optimizer: optim.Optimizer = OptimizerClass(self.model_stage.parameters(), betas=(0.9, 0.999))
+        self.optimizer = optim.Adam(self.model_stage.parameters(), betas=(0.9, 0.999))
         if os.path.exists(snapshot_path):
             print("Loading snapshot")
             self._load_snapshot(snapshot_path)
@@ -245,10 +244,9 @@ def main():
     trainer = Trainer(
         model_stages=model_stages,
         train_data=data_loader,
-        OptimizerClass=optim.Adam,
         num_microbatches=4,
         save_every=2,
-        snapshot_path=f"{CHECKPOINT_DIR}/pp-kds307w3m93dd/epoch_2",
+        # snapshot_path=f"{CHECKPOINT_DIR}/pp-kds307w3m93dd/epoch_2",
     )
     trainer.train(max_epochs=3)
 
