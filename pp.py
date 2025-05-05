@@ -120,7 +120,7 @@ class Trainer:
 
         self.model_stage = self.model_stages[self.local_rank]
         self.model_stage.to(self.device)
-        self.optimizer: optim.Optimizer = OptimizerClass(self.model_stage.parameters())
+        self.optimizer: optim.Optimizer = OptimizerClass(self.model_stage.parameters(), betas=(0.9, 0.999))
         if os.path.exists(snapshot_path):
             print("Loading snapshot")
             self._load_snapshot(snapshot_path)
