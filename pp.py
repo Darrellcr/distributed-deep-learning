@@ -190,7 +190,8 @@ class Trainer:
 
                 self.epoch_losses = []
 
-            if self.save_every != 0 and epoch != 0 and epoch % self.save_every == 0:
+            start_epoch = epoch == 0 or epoch == self.epochs_run
+            if self.save_every != 0 and not start_epoch and epoch % self.save_every == 0:
                 self._save_snapshot(epoch)
 
     def _log_loss(self, loss, epoch):
