@@ -100,7 +100,7 @@ class Trainer:
         self,
         model_stages: list[torch.nn.Module],
         train_data: DataLoader,
-        optimizers: list[torch.optim.Optimizer],
+        OptimizerClass: optim.Optimizer,
         num_microbatches: int = 4,
         save_every: int = 0,
         snapshot_path: str = '',
@@ -112,7 +112,6 @@ class Trainer:
 
         self.model_stages = model_stages
         self.train_data: DataLoader[torch.Tensor] = train_data
-        self.optimizer = optimizers[self.local_rank]
         self.save_every = save_every
         self.epochs_run = 0
         self.epoch_losses = []
@@ -124,6 +123,7 @@ class Trainer:
             print("Loading snapshot")
             self._load_snapshot(snapshot_path)
         self.model_stage.to(self.device)
+        self.optimizer: optim.Optimizer = OptimizerClass(self.model_stage.parameters())
 
         self.pipeline_stage = PipelineStage(
             self.model_stage,
@@ -240,12 +240,13 @@ def main():
         model.classifier,
     )
     model_stages = [stage1, stage2]
-    optimizers = [optim.Adam(stage.parameters()) for stage in model_stages]
+    # optimizers = [optim.Adam(stage.parameters()) for stage in model_stages]
+    OptimizerClass = optim.Adam
 
     trainer = Trainer(
         model_stages=model_stages,
         train_data=data_loader,
-        optimizers=optimizers,
+        OptimizerClass=OptimizerClass,
         num_microbatches=4,
         save_every=2,
         snapshot_path=f"{CHECKPOINT_DIR}/pp-jmmpkdf2p4x3bd/epoch_2",
