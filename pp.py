@@ -72,16 +72,17 @@ class AptosDataset(Dataset):
 
 
 class AppState(Stateful):
-    def __init__(self, epoch: int, model: nn.Module, optimizer: Union[torch.optim.Optimizer, Iterable[torch.optim.Optimizer]] = None):
+    def __init__(self, epoch: int, model: nn.Module, optimizer: Union[torch.optim.Optimizer, Iterable[torch.optim.Optimizer]], global_rank):
         self.epoch = epoch
         self.model = model
         self.optimizer = optimizer
+        self.global_rank = global_rank
 
     def state_dict(self):
         model_state_dict, optimizer_state_dict = get_state_dict(self.model, self.optimizer)
         return {
-            "model": model_state_dict,
-            "optim": optimizer_state_dict,
+            f"model{self.global_rank}": model_state_dict,
+            f"optim{self.global_rank}": optimizer_state_dict,
             "epoch": torch.tensor(self.epoch),
         }
 
@@ -89,8 +90,8 @@ class AppState(Stateful):
         set_state_dict(
             self.model,
             self.optimizer,
-            model_state_dict=state_dict["model"],
-            optim_state_dict=state_dict["optim"]
+            model_state_dict=state_dict[f"model{self.global_rank}"],
+            optim_state_dict=state_dict[f"optim{self.global_rank}"]
         )
         self.epoch = state_dict["epoch"].item()
     
@@ -138,14 +139,14 @@ class Trainer:
         )
 
     def _load_snapshot(self, snapshot_path):
-        state_dict = {f"app{self.global_rank}": AppState(self.epochs_run, self.model_stage, self.optimizer)}
+        state_dict = {f"app": AppState(self.epochs_run, self.model_stage, self.optimizer)}
         dcp.load(state_dict, checkpoint_id=f"{snapshot_path}")
-        self.epochs_run = state_dict[f"app{self.global_rank}"].epoch
+        self.epochs_run = state_dict[f"app"].epoch
         
         print(f"Resuming training from snapshot at Epoch {self.epochs_run}")
 
     def _save_snapshot(self, epoch: int):
-        state_dict = {f"app{self.global_rank}": AppState(epoch, self.model_stage, self.optimizer)}
+        state_dict = {f"app": AppState(epoch, self.model_stage, self.optimizer, self.global_rank)}
         save_path = CHECKPOINT_DIR + f"/{self.job_id}/epoch_{epoch}"
         os.makedirs(save_path, exist_ok=True)
 
@@ -248,7 +249,7 @@ def main():
         save_every=2,
         # snapshot_path=f"{CHECKPOINT_DIR}/pp-hb4wjkl5l3x36/epoch_2",
     )
-    trainer.train(max_epochs=3)
+    trainer.train(max_epochs=1)
 
     cleanup()
 
