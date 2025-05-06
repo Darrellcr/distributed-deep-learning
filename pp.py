@@ -190,9 +190,9 @@ class Trainer:
 
                 self.epoch_losses = []
 
-            # is_start_epoch = epoch == 0 or epoch == self.epochs_run
-            # if self.save_every != 0 and not is_start_epoch and epoch % self.save_every == 0:
-            self._save_snapshot(epoch)
+            is_start_epoch = epoch == 0 or epoch == self.epochs_run
+            if self.save_every != 0 and not is_start_epoch and epoch % self.save_every == 0:
+                self._save_snapshot(epoch)
 
     def _log_loss(self, loss, epoch):
         with open("/mnt/dcornelius/training_logs/loss.csv", "a") as f:
@@ -249,7 +249,7 @@ def main():
         save_every=2,
         # snapshot_path=f"{CHECKPOINT_DIR}/pp-hb4wjkl5l3x36/epoch_2",
     )
-    trainer.train(max_epochs=1)
+    trainer.train(max_epochs=3)
 
     cleanup()
 
