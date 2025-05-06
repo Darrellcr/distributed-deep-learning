@@ -138,15 +138,15 @@ class Trainer:
         )
 
     def _load_snapshot(self, snapshot_path):
-        state_dict = {"app": AppState(self.epochs_run, self.model_stage, self.optimizer)}
-        dcp.load(state_dict, checkpoint_id=f"{snapshot_path}/{self.global_rank}")
-        self.epochs_run = state_dict["app"].epoch
+        state_dict = {f"app{self.global_rank}": AppState(self.epochs_run, self.model_stage, self.optimizer)}
+        dcp.load(state_dict, checkpoint_id=f"{snapshot_path}")
+        self.epochs_run = state_dict[f"app{self.global_rank}"].epoch
         
         print(f"Resuming training from snapshot at Epoch {self.epochs_run}")
 
     def _save_snapshot(self, epoch: int):
-        state_dict = {"app": AppState(epoch, self.model_stage, self.optimizer)}
-        save_path = CHECKPOINT_DIR + f"/{self.job_id}/epoch_{epoch}/{self.global_rank}"
+        state_dict = {f"app{self.global_rank}": AppState(epoch, self.model_stage, self.optimizer)}
+        save_path = CHECKPOINT_DIR + f"/{self.job_id}/epoch_{epoch}"
         os.makedirs(save_path, exist_ok=True)
 
         dcp.save(state_dict, checkpoint_id=save_path)
@@ -189,9 +189,9 @@ class Trainer:
 
                 self.epoch_losses = []
 
-            is_start_epoch = epoch == 0 or epoch == self.epochs_run
-            if self.save_every != 0 and not is_start_epoch and epoch % self.save_every == 0:
-                self._save_snapshot(epoch)
+            # is_start_epoch = epoch == 0 or epoch == self.epochs_run
+            # if self.save_every != 0 and not is_start_epoch and epoch % self.save_every == 0:
+            self._save_snapshot(epoch)
 
     def _log_loss(self, loss, epoch):
         with open("/mnt/dcornelius/training_logs/loss.csv", "a") as f:
@@ -246,7 +246,7 @@ def main():
         train_data=data_loader,
         num_microbatches=4,
         save_every=2,
-        snapshot_path=f"{CHECKPOINT_DIR}/pp-hb4wjkl5l3x36/epoch_2",
+        # snapshot_path=f"{CHECKPOINT_DIR}/pp-hb4wjkl5l3x36/epoch_2",
     )
     trainer.train(max_epochs=3)
 
