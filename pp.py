@@ -1,11 +1,13 @@
 import csv
 from datetime import datetime
 import os
+from pathlib import Path
 import random
 from typing import Union, Iterable
 
 import numpy as np
 import pandas as pd
+from sklearn.metrics import cohen_kappa_score
 import torch
 from torch import optim, nn
 import torch.distributed as dist
@@ -100,9 +102,11 @@ class Trainer:
     def __init__(
         self,
         model_stages: list[torch.nn.Module],
+        OptimizerClass: type[optim.Optimizer],
         train_data: DataLoader,
+        test_data: DataLoader,
         num_microbatches: int = 4,
-        save_every: int = 0,
+        metric_for_eval: str = 'qwk',
         snapshot_path: str = '',
     ) -> None:
         self.job_id = os.getenv("TORCHX_JOB_ID", "local").split("/")[-1]
@@ -112,6 +116,7 @@ class Trainer:
 
         self.model_stages = model_stages
         self.train_data: DataLoader[torch.Tensor] = train_data
+        self.test_data: DataLoader[torch.Tensor] = test_data
         self.save_every = save_every
         self.epochs_run = 0
         self.epoch_losses = []
@@ -120,10 +125,12 @@ class Trainer:
 
         self.model_stage = self.model_stages[self.local_rank]
         self.model_stage.to(self.device)
-        self.optimizer = optim.Adam(self.model_stage.parameters(), betas=(0.9, 0.999))
+        self.optimizer = OptimizerClass(self.model_stage.parameters())
         if os.path.exists(snapshot_path):
             print("Loading snapshot")
             self._load_snapshot(snapshot_path)
+
+        self.is_last_stage = self.local_rank == len(self.model_stages) - 1
 
         self.pipeline_stage = PipelineStage(
             self.model_stage,
@@ -138,8 +145,10 @@ class Trainer:
             loss_fn=F.cross_entropy,
         )
 
+        self.best_qwk = -1
+
     def _load_snapshot(self, snapshot_path):
-        state_dict = {f"app": AppState(self.epochs_run, self.model_stage, self.optimizer)}
+        state_dict = {f"app": AppState(self.epochs_run, self.model_stage, self.optimizer, self.global_rank)}
         dcp.load(state_dict, checkpoint_id=f"{snapshot_path}")
         self.epochs_run = state_dict[f"app"].epoch
         
@@ -155,19 +164,25 @@ class Trainer:
         print(
             f"Epoch {epoch} | Training snapshot saved at {self.snapshot_path}")
 
-    def _run_batch(self, source, targets):
-        self.optimizer.zero_grad()
+    def _run_batch(self, source, targets, inference: bool = False):
+        if not inference:
+            self.optimizer.zero_grad()
 
+        output = None
         if self.local_rank == 0:
             self.schedule.step(source)
-        elif self.local_rank == len(self.model_stages) - 1:
+        elif self.is_last_stage:
             losses = []
-            self.schedule.step(target=targets, losses=losses)
-            self.epoch_losses.append(losses)
+            output = self.schedule.step(target=targets, losses=losses)
+            if not inference:
+                self.epoch_losses.append(losses)
         else:
             self.schedule.step()
 
-        self.optimizer.step()
+        if not inference:
+            self.optimizer.step()
+        
+        return output
 
     def _run_epoch(self, epoch):
         b_sz = len(next(iter(self.train_data))[0])
@@ -184,15 +199,49 @@ class Trainer:
         for epoch in range(self.epochs_run, max_epochs):
             self._run_epoch(epoch)
 
-            if self.local_rank == len(self.model_stages) - 1:
+            if self.is_last_stage:
                 loss = torch.mean(torch.tensor(self.epoch_losses, device=self.device))
                 self._log_loss(loss, epoch)
 
                 self.epoch_losses = []
 
-            is_start_epoch = epoch == 0 or epoch == self.epochs_run
-            if self.save_every != 0 and not is_start_epoch and epoch % self.save_every == 0:
-                self._save_snapshot(epoch)
+            self.model_stage.eval()
+            save_model = torch.tensor(self._evaluate())
+            self.model_stage.train()
+            dist.broadcast(save_model, src=len(self.model_stages) - 1)
+
+            if save_model:
+                print(f"Saving model at epoch {epoch}")
+                # self._save_snapshot(epoch)
+    
+    @torch.no_grad()
+    def _evaluate(self):
+        merged_targets = torch.tensor([], device=self.device)
+        merged_output = torch.tensor([], device=self.device)
+        merged_output = []
+        for source, targets in self.test_data:
+            source = source.to('cuda:0')
+            targets = targets.to(f'cuda:{torch.cuda.device_count() - 1}')
+            output = self._run_batch(source, targets, inference=True)
+
+            if self.is_last_stage:
+                merged_targets = torch.cat((merged_targets, targets), dim=0)
+                output = torch.softmax(output, dim=1)
+                merged_output = torch.cat((merged_output, output), dim=0)
+
+        if self.is_last_stage:
+            merged_output = merged_output.detach().cpu().numpy()
+            merged_targets = merged_targets.detach().cpu().numpy()
+            merged_output = np.argmax(merged_output, axis=1)
+            qwk = cohen_kappa_score(merged_targets, merged_output, weights='quadratic')
+            print(f"QWK: {qwk}")
+            if qwk > self.best_qwk:
+                self.best_qwk = qwk
+                print(f"Best QWK: {self.best_qwk}")
+                return True
+        return False
+
+            
 
     def _log_loss(self, loss, epoch):
         with open("/mnt/dcornelius/training_logs/loss.csv", "a") as f:
@@ -206,16 +255,30 @@ def main():
     seed = 42
     set_seed(seed)
 
-    dataset = AptosDataset(
-        csv_file="/mnt/dcornelius/preprocessed-aptos/train.csv",
-        root_dir="/mnt/dcornelius/preprocessed-aptos/train_images",
+    dataset_dir = Path("/mnt/dcornelius/preprocessed-aptos")
+    train_dataset = AptosDataset(
+        csv_file=(dataset_dir / "train.csv"),
+        root_dir=(dataset_dir / "train_images"),
         filename_col="new_id_code",
         label_col="diagnosis",
         transform=Normalize(),
     )
+    test_dataset = AptosDataset(
+        csv_file=(dataset_dir / "test.csv"),
+        root_dir=(dataset_dir / "test_images"),
+        filename_col="id_code",
+        label_col="diagnosis",
+        transform=Normalize(),
+    )
+    
     g = torch.Generator()
     g.manual_seed(seed)
-    data_loader = DataLoader(dataset, batch_size=16, drop_last=True, shuffle=True, generator=g)
+    train_loader = DataLoader(
+        train_dataset, batch_size=16, drop_last=True, shuffle=True, generator=g
+    )
+    test_loader = DataLoader(
+        test_dataset, batch_size=16, drop_last=True, shuffle=True
+    )
 
     model = models.densenet121()
     print("model initialized")
@@ -240,11 +303,12 @@ def main():
         model.classifier,
     )
     model_stages = [stage1, stage2]
-    # optimizers = [optim.Adam(stage.parameters()) for stage in model_stages]
 
     trainer = Trainer(
         model_stages=model_stages,
-        train_data=data_loader,
+        train_data=train_loader,
+        test_data=test_loader,
+        OptimizerClass=optim.Adam,
         num_microbatches=4,
         save_every=2,
         # snapshot_path=f"{CHECKPOINT_DIR}/pp-hb4wjkl5l3x36/epoch_2",
