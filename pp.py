@@ -224,17 +224,22 @@ class Trainer:
     
     @torch.no_grad()
     def _evaluate(self):
-        merged_targets = torch.tensor([], device=self.device, dtype=torch.float)
-        merged_output = torch.tensor([], device=self.device, dtype=torch.float)
+        merged_targets = None
+        merged_output = None
         for source, targets in self.test_data:
             source = source.to('cuda:0')
             targets = targets.to(f'cuda:{torch.cuda.device_count() - 1}')
             output = self._run_batch_inference(source)
 
             if self.is_last_stage:
-                merged_targets = torch.cat((merged_targets, targets), dim=0)
-                output = torch.softmax(output, dim=1)
-                merged_output = torch.cat((merged_output, output), dim=0)
+                if merged_targets is None:
+                    merged_targets = torch.clone(targets)
+                else:
+                    merged_targets = torch.cat((merged_targets, targets), dim=0)
+                if merged_output is None:
+                    merged_output = torch.clone(output)
+                else:
+                    merged_output = torch.cat((merged_output, output), dim=0)
 
         if self.is_last_stage:
             loss = F.cross_entropy(merged_output, merged_targets)
