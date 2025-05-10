@@ -214,7 +214,7 @@ class Trainer:
                 self.epoch_losses = []
 
             self.model_stage.eval()
-            save_model = torch.tensor(self._evaluate())
+            save_model = torch.tensor(self._evaluate(), device=self.device)
             self.model_stage.train()
             dist.broadcast(save_model, src=len(self.model_stages) - 1)
 
@@ -224,8 +224,8 @@ class Trainer:
     
     @torch.no_grad()
     def _evaluate(self):
-        merged_targets = torch.tensor([], device=self.device)
-        merged_output = torch.tensor([], device=self.device)
+        merged_targets = torch.tensor([], device=self.device, dtype=torch.float)
+        merged_output = torch.tensor([], device=self.device, dtype=torch.float)
         for source, targets in self.test_data:
             source = source.to('cuda:0')
             targets = targets.to(f'cuda:{torch.cuda.device_count() - 1}')
