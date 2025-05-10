@@ -200,7 +200,7 @@ class Trainer:
 
             if self.is_last_stage:
                 loss = torch.mean(torch.tensor(self.epoch_losses, device=self.device))
-                self._log_loss(loss, epoch)
+                self._log_metric(loss, epoch, "loss")
 
                 self.epoch_losses = []
 
@@ -237,16 +237,18 @@ class Trainer:
             if qwk > self.best_qwk:
                 self.best_qwk = qwk
                 print(f"Best QWK: {self.best_qwk}")
+                self._log_metric(qwk, self.epochs_run, "qwk")
                 return True
         return False
 
             
 
-    def _log_loss(self, loss, epoch):
-        with open("/mnt/dcornelius/training_logs/loss.csv", "a") as f:
+    def _log_metric(self, metric, epoch, type):
+        with open(f"/mnt/dcornelius/training_logs/{type}.csv", "a") as f:
             writer = csv.writer(f)
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            writer.writerow([now, self.job_id, self.global_rank, self.local_rank, epoch, loss])
+            writer.writerow([now, self.job_id, self.global_rank, self.local_rank, epoch, metric])
+    
             
 
 def main():
