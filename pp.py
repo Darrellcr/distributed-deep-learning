@@ -106,7 +106,6 @@ class Trainer:
         train_data: DataLoader,
         test_data: DataLoader,
         num_microbatches: int = 4,
-        metric_for_eval: str = 'qwk',
         snapshot_path: str = '',
     ) -> None:
         self.job_id = os.getenv("TORCHX_JOB_ID", "local").split("/")[-1]
@@ -221,7 +220,7 @@ class Trainer:
             if save_model:
                 print(f"Saving model at epoch {epoch}")
                 # self._save_snapshot(epoch)
-    
+
     @torch.no_grad()
     def _evaluate(self):
         merged_targets = None
@@ -243,28 +242,28 @@ class Trainer:
 
         if self.is_last_stage:
             loss = F.cross_entropy(merged_output, merged_targets)
-            print(f"Validation Loss: {loss}")
-            self._log_metric(loss, self.epochs_run, "val_loss")
+            print(f"Epoch {self.epochs_run} | Validation Loss: {loss}")
+            self._log_metric("val_loss", loss, self.epochs_run)
             merged_output = merged_output.detach().cpu().numpy()
             merged_targets = merged_targets.detach().cpu().numpy()
             merged_output = np.argmax(merged_output, axis=1)
 
             qwk = cohen_kappa_score(merged_targets, merged_output, weights='quadratic')
-            print(f"Validation QWK: {qwk}")
+            print(f"Epoch {self.epochs_run} | Validation QWK: {qwk}")
+            
             if qwk > self.best_qwk:
                 self.best_qwk = qwk
                 print(f"Best validation QWK: {self.best_qwk}")
-                self._log_metric(qwk, self.epochs_run, "qwk")
+                self._log_metric("qwk", qwk, self.epochs_run)
                 return True
+            
         return False
 
-            
-
-    def _log_metric(self, metric, epoch, type):
-        with open(f"/mnt/dcornelius/training_logs/{type}.csv", "a") as f:
+    def _log_metric(self, metric, value, epoch):
+        with open(f"/mnt/dcornelius/training_logs/{metric}.csv", "a") as f:
             writer = csv.writer(f)
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            writer.writerow([now, self.job_id, self.global_rank, self.local_rank, epoch, metric])
+            writer.writerow([now, self.job_id, self.global_rank, self.local_rank, epoch, value])
     
             
 
