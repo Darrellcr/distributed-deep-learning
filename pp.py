@@ -144,6 +144,11 @@ class Trainer:
             loss_fn=F.cross_entropy,
         )
 
+        self.schedule_inference = ScheduleGPipe(
+            self.pipeline_stage,
+            n_microbatches=self.num_microbatches,
+        )
+
         self.best_qwk = -1
 
     def _load_snapshot(self, snapshot_path):
@@ -163,26 +168,30 @@ class Trainer:
         print(
             f"Epoch {epoch} | Training snapshot saved at {self.snapshot_path}")
 
-    def _run_batch(self, source, targets, inference: bool = False):
-        if not inference:
-            self.optimizer.zero_grad()
+    def _run_batch(self, source, targets):
+        self.optimizer.zero_grad()
 
-        output = None
         if self.local_rank == 0:
             self.schedule.step(source)
         elif self.is_last_stage:
             losses = []
-            output = self.schedule.step(target=targets, losses=losses)
-            if not inference:
-                self.epoch_losses.append(losses)
+            self.schedule.step(target=targets, losses=losses)
+            self.epoch_losses.append(losses)
         else:
             self.schedule.step()
 
-        if not inference:
-            self.optimizer.step()
-        
-        return output
+        self.optimizer.step()
 
+    def _run_batch_inference(self, source):
+        if self.local_rank == 0:
+            output = self.schedule_inference.step(source)
+        elif self.is_last_stage:
+            output = self.schedule_inference.step()
+        else:
+            output = self.schedule_inference.step()
+
+        return output
+        
     def _run_epoch(self, epoch):
         b_sz = len(next(iter(self.train_data))[0])
         print(f"[GPU{self.global_rank}] Starting Epoch {epoch}")
@@ -221,7 +230,7 @@ class Trainer:
         for source, targets in self.test_data:
             source = source.to('cuda:0')
             targets = targets.to(f'cuda:{torch.cuda.device_count() - 1}')
-            output = self._run_batch(source, targets, inference=True)
+            output = self._run_batch_inference(source)
 
             if self.is_last_stage:
                 merged_targets = torch.cat((merged_targets, targets), dim=0)
@@ -231,12 +240,16 @@ class Trainer:
         if self.is_last_stage:
             merged_output = merged_output.detach().cpu().numpy()
             merged_targets = merged_targets.detach().cpu().numpy()
+            loss = F.cross_entropy(merged_output, merged_targets)
+            print(f"Validation Loss: {loss}")
+            self._log_metric(loss, self.epochs_run, "val_loss")
             merged_output = np.argmax(merged_output, axis=1)
+
             qwk = cohen_kappa_score(merged_targets, merged_output, weights='quadratic')
-            print(f"QWK: {qwk}")
+            print(f"Validation QWK: {qwk}")
             if qwk > self.best_qwk:
                 self.best_qwk = qwk
-                print(f"Best QWK: {self.best_qwk}")
+                print(f"Best validation QWK: {self.best_qwk}")
                 self._log_metric(qwk, self.epochs_run, "qwk")
                 return True
         return False
