@@ -226,7 +226,6 @@ class Trainer:
     def _evaluate(self):
         merged_targets = torch.tensor([], device=self.device)
         merged_output = torch.tensor([], device=self.device)
-        merged_output = []
         for source, targets in self.test_data:
             source = source.to('cuda:0')
             targets = targets.to(f'cuda:{torch.cuda.device_count() - 1}')
