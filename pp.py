@@ -237,11 +237,11 @@ class Trainer:
                 merged_output = torch.cat((merged_output, output), dim=0)
 
         if self.is_last_stage:
-            merged_output = merged_output.detach().cpu().numpy()
-            merged_targets = merged_targets.detach().cpu().numpy()
             loss = F.cross_entropy(merged_output, merged_targets)
             print(f"Validation Loss: {loss}")
             self._log_metric(loss, self.epochs_run, "val_loss")
+            merged_output = merged_output.detach().cpu().numpy()
+            merged_targets = merged_targets.detach().cpu().numpy()
             merged_output = np.argmax(merged_output, axis=1)
 
             qwk = cohen_kappa_score(merged_targets, merged_output, weights='quadratic')
