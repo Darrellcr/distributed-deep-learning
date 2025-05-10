@@ -117,7 +117,6 @@ class Trainer:
         self.model_stages = model_stages
         self.train_data: DataLoader[torch.Tensor] = train_data
         self.test_data: DataLoader[torch.Tensor] = test_data
-        self.save_every = save_every
         self.epochs_run = 0
         self.epoch_losses = []
         self.snapshot_path = snapshot_path
@@ -310,7 +309,6 @@ def main():
         test_data=test_loader,
         OptimizerClass=optim.Adam,
         num_microbatches=4,
-        save_every=2,
         # snapshot_path=f"{CHECKPOINT_DIR}/pp-hb4wjkl5l3x36/epoch_2",
     )
     trainer.train(max_epochs=3)
