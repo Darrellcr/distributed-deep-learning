@@ -211,7 +211,7 @@ class Trainer:
                 self._log_metric("best_qwk", qwk, self.epochs_run)
                 return True
             
-            return False
+        return False
 
     def _log_metric(self, metric, value, epoch):
         with open(f"/mnt/dcornelius/training_logs/{metric}.csv", "a") as f:
@@ -246,7 +246,7 @@ def main():
     test_sampler = DistributedSampler(test_dataset, shuffle=False, drop_last=True)
     test_loader = DataLoader(test_dataset, batch_size=16, sampler=test_sampler, shuffle=False)
     
-    model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+    model = models.densenet121()
     optimizer = optim.Adam(model.parameters())
 
     trainer = Trainer(
