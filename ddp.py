@@ -1,6 +1,7 @@
 import csv
 from datetime import datetime
 import os
+from pathlib import Path
 import random
 from typing import Iterable, Union
 
@@ -221,24 +222,40 @@ class Trainer:
 
 def main():
     setup()
-    set_seed(42)
+    seed = 42
+    set_seed(seed)
 
-    dataset = AptosDataset(
-        csv_file="/mnt/dcornelius/preprocessed-aptos/train.csv",
-        root_dir="/mnt/dcornelius/preprocessed-aptos/train_images",
+    dataset_dir = Path("/mnt/dcornelius/preprocessed-aptos")
+    train_dataset = AptosDataset(
+        csv_file=(dataset_dir / "train.csv"),
+        root_dir=(dataset_dir / "train_images"),
         filename_col="new_id_code",
         label_col="diagnosis",
         transform=Normalize(),
     )
-    sampler = DistributedSampler(dataset)
-    data_loader = DataLoader(dataset, batch_size=8, sampler=sampler, shuffle=True)
+    train_sampler = DistributedSampler(train_dataset, shuffle=True, drop_last=True, seed=seed)
+    train_loader = DataLoader(train_dataset, batch_size=16, sampler=train_sampler, shuffle=False)
+
+    test_dataset = AptosDataset(
+        csv_file=(dataset_dir / "test.csv"),
+        root_dir=(dataset_dir / "test_images"),
+        filename_col="id_code",
+        label_col="diagnosis",
+        transform=Normalize(),
+    )
+    test_sampler = DistributedSampler(test_dataset, shuffle=False, drop_last=True)
+    test_loader = DataLoader(test_dataset, batch_size=16, sampler=test_sampler, shuffle=False)
+    
     model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
     optimizer = optim.Adam(model.parameters())
 
     trainer = Trainer(
         model=model,
-        train_data=data_loader,
+        train_data=train_loader,
+        test_data=test_loader,
         optimizer=optimizer,
+        # test_data=
+        # snapshot_path=
     )
     trainer.train(max_epochs=2)
     
