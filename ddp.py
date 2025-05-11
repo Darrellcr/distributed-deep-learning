@@ -145,6 +145,7 @@ class Trainer:
         self.optimizer.zero_grad()
         output = self.model(source)
         loss = F.cross_entropy(output, targets)
+        self.epoch_losses.append(loss)
         loss.backward()
         self.optimizer.step()
 
@@ -165,6 +166,12 @@ class Trainer:
     def train(self, max_epochs: int):
         for epoch in range(self.epochs_run, max_epochs):
             self._run_epoch(epoch)
+
+            if self.global_rank == 0:
+                loss = torch.mean(torch.tensor(self.epoch_losses, device=self.device))
+                print(f"Epoch {epoch} | Loss: {loss.item()}")
+                self._log_metric("loss", loss, epoch)
+                self.epoch_losses = []
             
             self.model.eval()
             save_model = torch.tensor(self._evaluate(), device=self.device)
@@ -208,7 +215,7 @@ class Trainer:
             if qwk > self.best_qwk:
                 self.best_qwk = qwk
                 print(f"Best Validation QWK: {self.best_qwk}")
-                self._log_metric("best_qwk", qwk, self.epochs_run)
+                self._log_metric("qwk", qwk, self.epochs_run)
                 return True
             
         return False

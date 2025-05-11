@@ -208,6 +208,7 @@ class Trainer:
 
             if self.is_last_stage:
                 loss = torch.mean(torch.tensor(self.epoch_losses, device=self.device))
+                print(f"Epoch {epoch} | Loss: {loss.item()}")
                 self._log_metric(loss, epoch, "loss")
 
                 self.epoch_losses = []
@@ -250,7 +251,7 @@ class Trainer:
 
             qwk = cohen_kappa_score(merged_targets, merged_output, weights='quadratic')
             print(f"Epoch {self.epochs_run} | Validation QWK: {qwk}")
-            
+
             if qwk > self.best_qwk:
                 self.best_qwk = qwk
                 print(f"Best validation QWK: {self.best_qwk}")
