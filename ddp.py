@@ -135,7 +135,7 @@ class Trainer:
 
     def _save_snapshot(self, epoch):
         state_dict = {"app": AppState(self.epochs_run, self.model, self.optimizer)}
-        save_path = CHECKPOINT_DIR + f"{self.job_id}/epoch_{epoch}"
+        save_path = CHECKPOINT_DIR + f"/{self.job_id}/epoch_{epoch}"
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
         dcp.save(state_dict, checkpoint_id=save_path)
