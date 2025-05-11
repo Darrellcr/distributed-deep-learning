@@ -173,7 +173,7 @@ class Trainer:
 
             if save_model:
                 print(f"Saving snapshot at epoch {epoch}")
-                # self._save_snapshot(epoch)
+                self._save_snapshot(epoch)
 
     @torch.no_grad()
     def _evaluate(self):
@@ -257,7 +257,7 @@ def main():
         # test_data=
         # snapshot_path=
     )
-    trainer.train(max_epochs=2)
+    trainer.train(max_epochs=1)
     
     cleanup()
 
