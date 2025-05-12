@@ -137,6 +137,7 @@ class Trainer:
         self.model_stage = DDP(self.model_stage, process_group=self.device_mesh.get_group('dp'))
         self.is_last_stage = self.local_rank == len(self.model_stages) - 1
 
+        self.snapshot_job_id = snapshot_job_id
         snapshot_path = "" if snapshot_job_id is None else CHECKPOINT_DIR + f"/{snapshot_job_id}/epoch_{snapshot_epoch}"
         if os.path.exists(snapshot_path):
             print("Loading snapshot")
@@ -293,6 +294,7 @@ class Trainer:
         with open(f"/mnt/dcornelius/training_logs/{metric}.csv", "a") as f:
             writer = csv.writer(f)
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            model_start_job_id = self.snapshot_job_id if self.snapshot_job_id else self.job_id
             writer.writerow([now, self.job_id, self.global_rank, self.local_rank, epoch, value])
             
 
