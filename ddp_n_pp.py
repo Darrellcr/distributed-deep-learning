@@ -115,7 +115,8 @@ class Trainer:
         OptimizerClass: type[optim.Optimizer],
         device_mesh: DeviceMesh,
         num_microbatches: int = 4,
-        snapshot_path: str = '',
+        snapshot_job_id: str = None,
+        snapshot_epoch: int = None,
     ) -> None:
         self.job_id = os.getenv("TORCHX_JOB_ID", "local").split("/")[-1]
         self.global_rank = dist.get_rank()
@@ -128,7 +129,6 @@ class Trainer:
         self.test_data: DataLoader[torch.Tensor] = test_data
         self.epochs_run = 0
         self.epoch_losses = []
-        self.snapshot_path = snapshot_path
         self.num_microbatches = num_microbatches
 
         self.model_stage = self.model_stages[self.local_rank]
@@ -137,6 +137,7 @@ class Trainer:
         self.model_stage = DDP(self.model_stage, process_group=self.device_mesh.get_group('dp'))
         self.is_last_stage = self.local_rank == len(self.model_stages) - 1
 
+        snapshot_path = "" if snapshot_job_id is None else CHECKPOINT_DIR + f"/{snapshot_job_id}/epoch_{snapshot_epoch}"
         if os.path.exists(snapshot_path):
             print("Loading snapshot")
             self._load_snapshot(snapshot_path)
@@ -352,8 +353,8 @@ def main():
         OptimizerClass=optim.Adam,
         device_mesh=device_mesh,
         num_microbatches=4,
-        # snapshot_job_id=,
-        # snapshot_epoch=
+        snapshot_job_id="ddpnpp-cpjxq2lxc5sntd",
+        snapshot_epoch=1,
     )
     trainer.train(max_epochs=5)
 
