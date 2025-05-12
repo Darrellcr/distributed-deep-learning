@@ -214,7 +214,7 @@ class Trainer:
                 self._log_metric("epoch_time", end_time - start_time, epoch)
                 loss = torch.mean(torch.tensor(self.epoch_losses, device=self.device))
                 print(f"Epoch {epoch} | Loss: {loss.item()}")
-                self._log_metric("loss", loss, epoch)
+                self._log_metric("loss", loss.item(), epoch)
 
                 self.epoch_losses = []
 
@@ -249,13 +249,13 @@ class Trainer:
         if self.is_last_stage:
             loss = F.cross_entropy(merged_output, merged_targets)
             print(f"Epoch {epoch} | Validation Loss: {loss}")
-            self._log_metric("val_loss", loss, epoch)
+            self._log_metric("val_loss", loss.item(), epoch)
             merged_output = merged_output.detach().cpu().numpy()
             merged_targets = merged_targets.detach().cpu().numpy()
             merged_output = np.argmax(merged_output, axis=1)
 
             qwk = cohen_kappa_score(merged_targets, merged_output, weights='quadratic')
-            print(f"Epoch {epoch} | Validation QWK: {qwk}")
+            print(f"Epoch {epoch} | New Best Validation QWK: {qwk}")
 
             self._log_metric("qwk", qwk, epoch)
             if qwk > self.best_qwk:

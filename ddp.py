@@ -181,7 +181,7 @@ class Trainer:
 
             if self.global_rank == 0:
                 self._log_metric("epoch_time", end_time - start_time, epoch)
-                self._log_metric("loss", loss, epoch)
+                self._log_metric("loss", loss.item(), epoch)
             
             self.model.eval()
             save_model = torch.tensor(self._evaluate(epoch), device=self.device)
@@ -212,11 +212,11 @@ class Trainer:
             else:
                 local_targets = torch.cat((local_targets, targets), dim=0)
         
-        all_output = [torch.zeros_like(local_output) for _ in range(dist.get_world_size())]
+        all_output = [torch.zeros_like(local_output, device=self.device) for _ in range(dist.get_world_size())]
         dist.all_gather(tensor_list=all_output, tensor=local_output)
         all_output = torch.cat(all_output, dim=0)
 
-        all_targets = [torch.zeros_like(local_targets) for _ in range(dist.get_world_size())]
+        all_targets = [torch.zeros_like(local_targets, device=self.device) for _ in range(dist.get_world_size())]
         dist.all_gather(tensor_list=all_targets, tensor=local_targets)
         all_targets = torch.cat(all_targets, dim=0)
 
@@ -224,18 +224,18 @@ class Trainer:
         print(f"Epoch {epoch} | Validation Loss: {loss.item()}")
 
         if self.global_rank == 0:
-            self._log_metric("val_loss", loss, epoch)
+            self._log_metric("val_loss", loss.item(), epoch)
             all_output = all_output.detach().cpu().numpy()
             all_targets = all_targets.detach().cpu().numpy()
             all_output = np.argmax(all_output, axis=1)
 
             qwk = cohen_kappa_score(all_targets, all_output, weights="quadratic")
             print(f"Epoch {epoch} | Validation QWK: {qwk}")
-
             self._log_metric("qwk", qwk, epoch)
+
             if qwk > self.best_qwk:
                 self.best_qwk = qwk
-                print(f"Best Validation QWK: {self.best_qwk}")
+                print(f"New Best Validation QWK: {self.best_qwk}")
                 return True
             
         return False
