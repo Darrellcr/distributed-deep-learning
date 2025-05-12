@@ -314,7 +314,7 @@ def main():
     test_dataset = AptosDataset(
         csv_file=(dataset_dir / "test.csv"),
         root_dir=(dataset_dir / "test_images"),
-        filename_col="new_id_code",
+        filename_col="id_code",
         label_col="diagnosis",
         transform=Normalize(),
     )
