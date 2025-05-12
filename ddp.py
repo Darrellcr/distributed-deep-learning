@@ -153,9 +153,10 @@ class Trainer:
         loss.backward()
         self.optimizer.step()
 
-    def _run_batch_inference(self, source):
+    def _run_batch_inference(self, source, targets):
         output = self.model(source)
-        return output
+        loss = F.cross_entropy(output, targets)
+        return output, loss
 
     def _run_epoch(self, epoch):
         b_sz = len(next(iter(self.train_data))[0])
@@ -184,7 +185,7 @@ class Trainer:
                 self._log_metric("loss", loss, epoch)
             
             self.model.eval()
-            save_model = torch.tensor(self._evaluate(), device=self.device)
+            save_model = torch.tensor(self._evaluate(epoch), device=self.device)
             self.model.train()
             dist.broadcast(save_model, src=0)
 
@@ -193,15 +194,17 @@ class Trainer:
                 self._save_snapshot(epoch)
 
     @torch.no_grad()
-    def _evaluate(self):
+    def _evaluate(self, epoch):
         dist.barrier()
-        self.test_data.sampler.set_epoch(self.epochs_run)
+        self.test_data.sampler.set_epoch(epoch)
         local_targets = None
         local_output = None
+        losses = []
         for source, targets in self.test_data:
             source = source.to(self.device)
             targets = targets.to(self.device)
-            output = self._run_batch_inference(source)
+            output, loss = self._run_batch_inference(source, targets)
+            losses.append(loss)
 
             if local_output is None:
                 local_output = torch.clone(output)
@@ -220,22 +223,23 @@ class Trainer:
         dist.all_gather(tensor_list=all_targets, tensor=local_targets)
         all_targets = torch.cat(all_targets, dim=0)
 
-        loss = F.cross_entropy(all_output, all_targets)
-        print(f"Epoch {self.epochs_run} | Validation Loss: {loss.item()}")
+        loss = torch.mean(torch.tensor(losses, device=self.device))
+        dist.all_reduce(loss, op=dist.ReduceOp.AVG)
+        print(f"Epoch {epoch} | Validation Loss: {loss.item()}")
 
         if self.global_rank == 0:
-            self._log_metric("val_loss", loss, self.epochs_run)
+            self._log_metric("val_loss", loss, epoch)
             all_output = all_output.detach().cpu().numpy()
             all_targets = all_targets.detach().cpu().numpy()
             all_output = np.argmax(all_output, axis=1)
 
             qwk = cohen_kappa_score(all_targets, all_output, weights="quadratic")
-            print(f"Epoch {self.epochs_run} | Validation QWK: {qwk}")
+            print(f"Epoch {epoch} | Validation QWK: {qwk}")
 
             if qwk > self.best_qwk:
                 self.best_qwk = qwk
                 print(f"Best Validation QWK: {self.best_qwk}")
-                self._log_metric("qwk", qwk, self.epochs_run)
+                self._log_metric("qwk", qwk, epoch)
                 return True
             
         return False

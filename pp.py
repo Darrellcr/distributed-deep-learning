@@ -219,7 +219,7 @@ class Trainer:
                 self.epoch_losses = []
 
             self.model_stage.eval()
-            save_model = torch.tensor(self._evaluate(), device=self.device)
+            save_model = torch.tensor(self._evaluate(epoch), device=self.device)
             self.model_stage.train()
             dist.broadcast(save_model, src=len(self.model_stages) - 1)
 
@@ -228,7 +228,7 @@ class Trainer:
                 self._save_snapshot(epoch)
 
     @torch.no_grad()
-    def _evaluate(self):
+    def _evaluate(self, epoch: int):
         merged_targets = None
         merged_output = None
         for source, targets in self.test_data:
@@ -248,19 +248,19 @@ class Trainer:
 
         if self.is_last_stage:
             loss = F.cross_entropy(merged_output, merged_targets)
-            print(f"Epoch {self.epochs_run} | Validation Loss: {loss}")
-            self._log_metric("val_loss", loss, self.epochs_run)
+            print(f"Epoch {epoch} | Validation Loss: {loss}")
+            self._log_metric("val_loss", loss, epoch)
             merged_output = merged_output.detach().cpu().numpy()
             merged_targets = merged_targets.detach().cpu().numpy()
             merged_output = np.argmax(merged_output, axis=1)
 
             qwk = cohen_kappa_score(merged_targets, merged_output, weights='quadratic')
-            print(f"Epoch {self.epochs_run} | Validation QWK: {qwk}")
+            print(f"Epoch {epoch} | Validation QWK: {qwk}")
 
             if qwk > self.best_qwk:
                 self.best_qwk = qwk
                 print(f"Best validation QWK: {self.best_qwk}")
-                self._log_metric("qwk", qwk, self.epochs_run)
+                self._log_metric("qwk", qwk, epoch)
                 return True
             
         return False
