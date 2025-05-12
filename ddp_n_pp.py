@@ -272,7 +272,7 @@ class Trainer:
             print(f"Epoch {epoch} | Validation Loss: {loss.item():.4f}")
 
             if self.device_mesh.get_group('dp').rank() == 0:
-                self._log_metric("loss", loss.item(), epoch)
+                self._log_metric("val_loss", loss.item(), epoch)
                 all_targets = all_targets.detach().cpu().numpy()
                 all_output = all_output.detach().cpu().numpy()
                 all_output = np.argmax(all_output, axis=1)
