@@ -349,7 +349,7 @@ def main():
         model_stages=model_stages,
         train_data=train_loader,
         test_data=test_loader,
-        optimizers=optim.Adam,
+        OptimizerClass=optim.Adam,
         device_mesh=device_mesh,
         num_microbatches=4,
         # snapshot_job_id=,
