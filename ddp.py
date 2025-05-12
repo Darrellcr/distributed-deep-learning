@@ -155,8 +155,7 @@ class Trainer:
 
     def _run_batch_inference(self, source, targets):
         output = self.model(source)
-        loss = F.cross_entropy(output, targets)
-        return output, loss
+        return output
 
     def _run_epoch(self, epoch):
         b_sz = len(next(iter(self.train_data))[0])
@@ -199,12 +198,10 @@ class Trainer:
         self.test_data.sampler.set_epoch(epoch)
         local_targets = None
         local_output = None
-        losses = []
         for source, targets in self.test_data:
             source = source.to(self.device)
             targets = targets.to(self.device)
-            output, loss = self._run_batch_inference(source, targets)
-            losses.append(loss)
+            output= self._run_batch_inference(source, targets)
 
             if local_output is None:
                 local_output = torch.clone(output)
@@ -223,8 +220,7 @@ class Trainer:
         dist.all_gather(tensor_list=all_targets, tensor=local_targets)
         all_targets = torch.cat(all_targets, dim=0)
 
-        loss = torch.mean(torch.tensor(losses, device=self.device))
-        dist.all_reduce(loss, op=dist.ReduceOp.AVG)
+        loss = F.cross_entropy(all_output, all_targets)
         print(f"Epoch {epoch} | Validation Loss: {loss.item()}")
 
         if self.global_rank == 0:
@@ -236,10 +232,10 @@ class Trainer:
             qwk = cohen_kappa_score(all_targets, all_output, weights="quadratic")
             print(f"Epoch {epoch} | Validation QWK: {qwk}")
 
+            self._log_metric("qwk", qwk, epoch)
             if qwk > self.best_qwk:
                 self.best_qwk = qwk
                 print(f"Best Validation QWK: {self.best_qwk}")
-                self._log_metric("qwk", qwk, epoch)
                 return True
             
         return False
@@ -275,7 +271,7 @@ def main():
         label_col="diagnosis",
         transform=Normalize(),
     )
-    test_sampler = DistributedSampler(test_dataset, shuffle=False, drop_last=True)
+    test_sampler = DistributedSampler(test_dataset, shuffle=True, drop_last=True, seed=seed)
     test_loader = DataLoader(test_dataset, batch_size=16, sampler=test_sampler, shuffle=False)
     
     model = models.densenet121()
@@ -288,7 +284,7 @@ def main():
         # snapshot_job_id=,
         # snapshot_epoch=,
     )
-    trainer.train(max_epochs=1)
+    trainer.train(max_epochs=10)
     
     cleanup()
 

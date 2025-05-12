@@ -257,10 +257,10 @@ class Trainer:
             qwk = cohen_kappa_score(merged_targets, merged_output, weights='quadratic')
             print(f"Epoch {epoch} | Validation QWK: {qwk}")
 
+            self._log_metric("qwk", qwk, epoch)
             if qwk > self.best_qwk:
                 self.best_qwk = qwk
                 print(f"Best validation QWK: {self.best_qwk}")
-                self._log_metric("qwk", qwk, epoch)
                 return True
             
         return False
