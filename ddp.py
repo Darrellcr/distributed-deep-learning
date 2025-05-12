@@ -106,7 +106,8 @@ class Trainer:
         train_data: DataLoader,
         test_data: DataLoader,
         optimizer: torch.optim.Optimizer,
-        snapshot_path: str = '',
+        snapshot_job_id: str = None,
+        snapshot_epoch: int = None,
     ) -> None:
         self.job_id = os.getenv("TORCHX_JOB_ID", "local").split("/")[-1]
         self.global_rank = dist.get_rank()
@@ -123,6 +124,8 @@ class Trainer:
 
         self.model = DDP(self.model, device_ids=[self.local_rank])
 
+        self.snapshot_job_id = snapshot_job_id
+        snapshot_path = None if snapshot_job_id is None else CHECKPOINT_DIR + f"/{snapshot_job_id}/epoch_{snapshot_epoch}"
         if os.path.exists(snapshot_path):
             print("Loading snapshot")
             self._load_snapshot(snapshot_path)
@@ -191,39 +194,42 @@ class Trainer:
 
     @torch.no_grad()
     def _evaluate(self):
-        merged_targets = None
-        merged_output = None
+        dist.barrier()
+        self.test_data.sampler.set_epoch(self.epochs_run)
+        local_targets = None
+        local_output = None
         for source, targets in self.test_data:
             source = source.to(self.device)
             targets = targets.to(self.device)
             output = self._run_batch_inference(source)
 
-            if merged_output is None:
-                merged_output = torch.clone(output)
+            if local_output is None:
+                local_output = torch.clone(output)
             else:
-                merged_output = torch.cat((merged_output, output), dim=0)
-            if merged_targets is None:
-                merged_targets = torch.clone(targets)
+                local_output = torch.cat((local_output, output), dim=0)
+            if local_targets is None:
+                local_targets = torch.clone(targets)
             else:
-                merged_targets = torch.cat((merged_targets, targets), dim=0)
+                local_targets = torch.cat((local_targets, targets), dim=0)
         
-        tensor_list_output = [torch.zeros_like(merged_output) for _ in range(dist.get_world_size())]
-        dist.all_gather(tensor_list=tensor_list_output, tensor=merged_output)
-        merged_output = torch.cat(tensor_list_output, dim=0)
-        tensor_list_targets = [torch.zeros_like(merged_targets) for _ in range(dist.get_world_size())]
-        dist.all_gather(tensor_list=tensor_list_targets, tensor=merged_targets)
-        merged_targets = torch.cat(tensor_list_targets, dim=0)
+        all_output = [torch.zeros_like(local_output) for _ in range(dist.get_world_size())]
+        dist.all_gather(tensor_list=all_output, tensor=local_output)
+        all_output = torch.cat(all_output, dim=0)
 
-        loss = F.cross_entropy(merged_output, merged_targets)
+        all_targets = [torch.zeros_like(local_targets) for _ in range(dist.get_world_size())]
+        dist.all_gather(tensor_list=all_targets, tensor=local_targets)
+        all_targets = torch.cat(all_targets, dim=0)
+
+        loss = F.cross_entropy(all_output, all_targets)
         print(f"Epoch {self.epochs_run} | Validation Loss: {loss.item()}")
-        
+
         if self.global_rank == 0:
             self._log_metric("val_loss", loss, self.epochs_run)
-            merged_output = merged_output.detach().cpu().numpy()
-            merged_targets = merged_targets.detach().cpu().numpy()
-            merged_output = np.argmax(merged_output, axis=1)
+            all_output = all_output.detach().cpu().numpy()
+            all_targets = all_targets.detach().cpu().numpy()
+            all_output = np.argmax(all_output, axis=1)
 
-            qwk = cohen_kappa_score(merged_targets, merged_output, weights="quadratic")
+            qwk = cohen_kappa_score(all_targets, all_output, weights="quadratic")
             print(f"Epoch {self.epochs_run} | Validation QWK: {qwk}")
 
             if qwk > self.best_qwk:
@@ -238,7 +244,8 @@ class Trainer:
         with open(f"/mnt/dcornelius/training_logs/{metric}.csv", "a") as f:
             writer = csv.writer(f)
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            writer.writerow([now, self.job_id, self.global_rank, self.local_rank, epoch, value])
+            model_start_job_id = self.snapshot_job_id if self.snapshot_job_id else self.job_id
+            writer.writerow([now, self.job_id, self.global_rank, self.local_rank, model_start_job_id, epoch, value])
 
 
 def main():
@@ -275,8 +282,8 @@ def main():
         train_data=train_loader,
         test_data=test_loader,
         optimizer=optimizer,
-        # test_data=
-        # snapshot_path=
+        # snapshot_job_id=,
+        # snapshot_epoch=,
     )
     trainer.train(max_epochs=1)
     

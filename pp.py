@@ -107,7 +107,8 @@ class Trainer:
         train_data: DataLoader,
         test_data: DataLoader,
         num_microbatches: int = 4,
-        snapshot_path: str = '',
+        snapshot_job_id: str = None,
+        snapshot_epoch: int = None,
     ) -> None:
         self.job_id = os.getenv("TORCHX_JOB_ID", "local").split("/")[-1]
         self.global_rank = dist.get_rank()
@@ -119,7 +120,8 @@ class Trainer:
         self.test_data: DataLoader[torch.Tensor] = test_data
         self.epochs_run = 0
         self.epoch_losses = []
-        self.snapshot_path = snapshot_path
+        self.snapshot_job_id = snapshot_job_id
+        snapshot_path = None if snapshot_job_id is None else f"{CHECKPOINT_DIR}/{snapshot_job_id}/epoch_{snapshot_epoch}"
         self.num_microbatches = num_microbatches
 
         self.model_stage = self.model_stages[self.local_rank]
@@ -166,7 +168,7 @@ class Trainer:
         dcp.save(state_dict, checkpoint_id=save_path)
 
         print(
-            f"Epoch {epoch} | Training snapshot saved at {self.snapshot_path}")
+            f"Epoch {epoch} | Training snapshot saved at {save_path}")
 
     def _run_batch(self, source, targets):
         self.optimizer.zero_grad()
@@ -223,7 +225,7 @@ class Trainer:
 
             if save_model:
                 print(f"Saving model at epoch {epoch}")
-                # self._save_snapshot(epoch)
+                self._save_snapshot(epoch)
 
     @torch.no_grad()
     def _evaluate(self):
@@ -267,7 +269,8 @@ class Trainer:
         with open(f"/mnt/dcornelius/training_logs/{metric}.csv", "a") as f:
             writer = csv.writer(f)
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            writer.writerow([now, self.job_id, self.global_rank, self.local_rank, epoch, value])
+            model_start_job_id = self.snapshot_job_id if self.snapshot_job_id else self.job_id
+            writer.writerow([now, self.job_id, self.global_rank, self.local_rank, model_start_job_id, epoch, value])
     
             
 
@@ -331,7 +334,8 @@ def main():
         test_data=test_loader,
         OptimizerClass=optim.Adam,
         num_microbatches=4,
-        # snapshot_path=f"{CHECKPOINT_DIR}/pp-hb4wjkl5l3x36/epoch_2",
+        # snapshot_job_id=,
+        # snapshot_epoch=,
     )
     trainer.train(max_epochs=3)
 
