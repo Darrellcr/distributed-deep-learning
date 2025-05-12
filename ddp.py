@@ -105,7 +105,7 @@ class Trainer:
         model: torch.nn.Module,
         train_data: DataLoader,
         test_data: DataLoader,
-        optimizer: torch.optim.Optimizer,
+        OptimizerClass: type[optim.Optimizer],
         snapshot_job_id: str = None,
         snapshot_epoch: int = None,
     ) -> None:
@@ -117,7 +117,7 @@ class Trainer:
         self.train_data: DataLoader[torch.Tensor] = train_data
         self.test_data: DataLoader[torch.Tensor] = test_data
         self.model = model.to(self.device)
-        self.optimizer = optimizer
+        self.optimizer = OptimizerClass(self.model.parameters())
         self.epochs_run = 0
         self.epoch_losses = []
         self.best_qwk = -1
@@ -275,13 +275,12 @@ def main():
     test_loader = DataLoader(test_dataset, batch_size=16, sampler=test_sampler, shuffle=False)
     
     model = models.densenet121()
-    optimizer = optim.Adam(model.parameters())
 
     trainer = Trainer(
         model=model,
         train_data=train_loader,
         test_data=test_loader,
-        optimizer=optimizer,
+        OptimizerClass=optim.Adam,
         # snapshot_job_id=,
         # snapshot_epoch=,
     )
