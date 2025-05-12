@@ -125,7 +125,7 @@ class Trainer:
         self.model = DDP(self.model, device_ids=[self.local_rank])
 
         self.snapshot_job_id = snapshot_job_id
-        snapshot_path = None if snapshot_job_id is None else CHECKPOINT_DIR + f"/{snapshot_job_id}/epoch_{snapshot_epoch}"
+        snapshot_path = '' if snapshot_job_id is None else CHECKPOINT_DIR + f"/{snapshot_job_id}/epoch_{snapshot_epoch}"
         if os.path.exists(snapshot_path):
             print("Loading snapshot")
             self._load_snapshot(snapshot_path)

@@ -121,7 +121,7 @@ class Trainer:
         self.epochs_run = 0
         self.epoch_losses = []
         self.snapshot_job_id = snapshot_job_id
-        snapshot_path = None if snapshot_job_id is None else f"{CHECKPOINT_DIR}/{snapshot_job_id}/epoch_{snapshot_epoch}"
+        snapshot_path = "" if snapshot_job_id is None else f"{CHECKPOINT_DIR}/{snapshot_job_id}/epoch_{snapshot_epoch}"
         self.num_microbatches = num_microbatches
 
         self.model_stage = self.model_stages[self.local_rank]
