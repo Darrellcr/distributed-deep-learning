@@ -3,6 +3,7 @@ from datetime import datetime
 import os
 from pathlib import Path
 import random
+from time import perf_counter
 from typing import Iterable, Union
 
 import numpy as np
@@ -120,16 +121,16 @@ class Trainer:
         self.epoch_losses = []
         self.best_qwk = -1
 
+        self.model = DDP(self.model, device_ids=[self.local_rank])
+
         if os.path.exists(snapshot_path):
             print("Loading snapshot")
             self._load_snapshot(snapshot_path)
 
-        self.model = DDP(self.model, device_ids=[self.local_rank])
-
     def _load_snapshot(self, snapshot_path):
         state_dict = {"app": AppState(self.epochs_run, self.model, self.optimizer)}
         dcp.load(state_dict, checkpoint_id=f"{snapshot_path}")
-        self.epochs_run = state_dict["app"].epoch
+        self.epochs_run = state_dict["app"].epoch + 1
         
         print(f"Resuming training from snapshot at Epoch {self.epochs_run}")
 
@@ -165,13 +166,19 @@ class Trainer:
 
     def train(self, max_epochs: int):
         for epoch in range(self.epochs_run, max_epochs):
+            start_time = perf_counter()
             self._run_epoch(epoch)
+            end_time = perf_counter()
+            print(f"Epoch {epoch} | Time: {end_time - start_time:.2f}s")
+
+            loss = torch.mean(torch.tensor(self.epoch_losses, device=self.device))
+            dist.all_reduce(loss, op=dist.ReduceOp.AVG)
+            print(f"Epoch {epoch} | Loss: {loss.item()}")
+            self.epoch_losses = []
 
             if self.global_rank == 0:
-                loss = torch.mean(torch.tensor(self.epoch_losses, device=self.device))
-                print(f"Epoch {epoch} | Loss: {loss.item()}")
+                self._log_metric("epoch_time", end_time - start_time, epoch)
                 self._log_metric("loss", loss, epoch)
-                self.epoch_losses = []
             
             self.model.eval()
             save_model = torch.tensor(self._evaluate(), device=self.device)
@@ -191,19 +198,26 @@ class Trainer:
             targets = targets.to(self.device)
             output = self._run_batch_inference(source)
 
-            if self.global_rank == 0:
-                if merged_output is None:
-                    merged_output = torch.clone(output)
-                else:
-                    merged_output = torch.cat((merged_output, output), dim=0)
-                if merged_targets is None:
-                    merged_targets = torch.clone(targets)
-                else:
-                    merged_targets = torch.cat((merged_targets, targets), dim=0)
+            if merged_output is None:
+                merged_output = torch.clone(output)
+            else:
+                merged_output = torch.cat((merged_output, output), dim=0)
+            if merged_targets is None:
+                merged_targets = torch.clone(targets)
+            else:
+                merged_targets = torch.cat((merged_targets, targets), dim=0)
+        
+        tensor_list_output = [torch.zeros_like(merged_output) for _ in range(dist.get_world_size())]
+        dist.all_gather(tensor_list=tensor_list_output, tensor=merged_output)
+        merged_output = torch.cat(tensor_list_output, dim=0)
+        tensor_list_targets = [torch.zeros_like(merged_targets) for _ in range(dist.get_world_size())]
+        dist.all_gather(tensor_list=tensor_list_targets, tensor=merged_targets)
+        merged_targets = torch.cat(tensor_list_targets, dim=0)
+
+        loss = F.cross_entropy(merged_output, merged_targets)
+        print(f"Epoch {self.epochs_run} | Validation Loss: {loss.item()}")
         
         if self.global_rank == 0:
-            loss = F.cross_entropy(merged_output, merged_targets)
-            print(f"Epoch {self.epochs_run} | Validation Loss: {loss.item()}")
             self._log_metric("val_loss", loss, self.epochs_run)
             merged_output = merged_output.detach().cpu().numpy()
             merged_targets = merged_targets.detach().cpu().numpy()

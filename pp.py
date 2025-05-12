@@ -3,6 +3,7 @@ from datetime import datetime
 import os
 from pathlib import Path
 import random
+from time import perf_counter
 from typing import Union, Iterable
 
 import numpy as np
@@ -128,7 +129,7 @@ class Trainer:
             print("Loading snapshot")
             self._load_snapshot(snapshot_path)
 
-        self.is_last_stage = self.local_rank == len(self.model_stages) - 1
+        self.is_last_stage = self.global_rank == len(self.model_stages) - 1
 
         self.pipeline_stage = PipelineStage(
             self.model_stage,
@@ -153,7 +154,7 @@ class Trainer:
     def _load_snapshot(self, snapshot_path):
         state_dict = {f"app": AppState(self.epochs_run, self.model_stage, self.optimizer, self.global_rank)}
         dcp.load(state_dict, checkpoint_id=f"{snapshot_path}")
-        self.epochs_run = state_dict[f"app"].epoch
+        self.epochs_run = state_dict[f"app"].epoch + 1
         
         print(f"Resuming training from snapshot at Epoch {self.epochs_run}")
 
@@ -184,8 +185,6 @@ class Trainer:
     def _run_batch_inference(self, source):
         if self.local_rank == 0:
             output = self.schedule_inference.step(source)
-        elif self.is_last_stage:
-            output = self.schedule_inference.step()
         else:
             output = self.schedule_inference.step()
 
@@ -204,12 +203,16 @@ class Trainer:
     
     def train(self, max_epochs: int):
         for epoch in range(self.epochs_run, max_epochs):
+            start_time = perf_counter()
             self._run_epoch(epoch)
+            end_time = perf_counter()
 
             if self.is_last_stage:
+                print(f"Epoch {epoch} | Time: {end_time - start_time:.2f}s")
+                self._log_metric("epoch_time", end_time - start_time, epoch)
                 loss = torch.mean(torch.tensor(self.epoch_losses, device=self.device))
                 print(f"Epoch {epoch} | Loss: {loss.item()}")
-                self._log_metric(loss, epoch, "loss")
+                self._log_metric("loss", loss, epoch)
 
                 self.epoch_losses = []
 
