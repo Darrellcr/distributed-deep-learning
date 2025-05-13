@@ -294,7 +294,7 @@ class Trainer:
             writer = csv.writer(f)
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             model_start_job_id = self.snapshot_job_id if self.snapshot_job_id else self.job_id
-            writer.writerow([now, self.job_id, self.global_rank, self.local_rank, epoch, value])
+            writer.writerow([now, self.job_id, self.global_rank, self.local_rank, model_start_job_id, epoch, value])
             
 
 def main():
