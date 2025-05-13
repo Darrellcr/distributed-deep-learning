@@ -100,7 +100,7 @@ class Trainer:
         snapshot_epoch: int = None,
     ) -> None:
         self.job_id = os.getenv("TORCHX_JOB_ID", "local").split("/")[-1]
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         self.train_data: DataLoader[torch.Tensor] = train_data
         self.test_data: DataLoader[torch.Tensor] = test_data
@@ -234,7 +234,7 @@ def main():
     )
     g = torch.Generator()
     g.manual_seed(seed)
-    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, generator=g)
+    train_loader = DataLoader(train_dataset, batch_size=30, shuffle=True, generator=g)
 
     test_dataset = AptosDataset(
         csv_file=(dataset_dir / "test.csv"),
@@ -243,7 +243,7 @@ def main():
         label_col="diagnosis",
         transform=Normalize(),
     )
-    test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=30, shuffle=False)
     
     model = models.densenet121()
 
