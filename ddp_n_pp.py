@@ -227,7 +227,7 @@ class Trainer:
                 
                 if self.device_mesh.get_group('dp').rank() == 0:
                     self._log_metric("epoch_time", end_time - start_time, epoch)
-                    self._log_metric("loss", loss, epoch)
+                    self._log_metric("loss", loss.item(), epoch)
 
             self.epoch_losses = []
 
@@ -277,6 +277,10 @@ class Trainer:
                 self._log_metric("val_loss", loss.item(), epoch)
                 all_targets = all_targets.detach().cpu().numpy()
                 all_output = all_output.detach().cpu().numpy()
+                print('all_targets')
+                print(all_targets)
+                print('all_output')
+                print(all_output)
                 all_output = np.argmax(all_output, axis=1)
 
                 qwk = cohen_kappa_score(all_targets, all_output, weights='quadratic')
@@ -321,7 +325,7 @@ def main():
         label_col="diagnosis",
         transform=Normalize(),
     )
-    test_sampler = DistributedSampler(test_dataset, drop_last=True, shuffle=True, seed=seed)
+    test_sampler = DistributedSampler(test_dataset, drop_last=True, shuffle=False, seed=seed)
     test_loader = DataLoader(test_dataset, batch_size=14, sampler=test_sampler, drop_last=True, shuffle=False)
 
     model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
