@@ -314,7 +314,11 @@ def main():
         label_col="diagnosis",
         transform=Normalize(),
     )
-    train_sampler = DistributedSampler(train_dataset, num_replicas=device_mesh.get_group('dp').size(), drop_last=True, shuffle=True, seed=seed)
+    train_sampler = DistributedSampler(
+        train_dataset, 
+        num_replicas=device_mesh.get_group('dp').size(), 
+        rank=device_mesh.get_group('dp').rank(),
+        drop_last=True, shuffle=True, seed=seed)
     train_loader = DataLoader(train_dataset, batch_size=14, sampler=train_sampler, drop_last=True, shuffle=False)
 
     test_dataset = AptosDataset(
@@ -324,7 +328,11 @@ def main():
         label_col="diagnosis",
         transform=Normalize(),
     )
-    test_sampler = DistributedSampler(test_dataset, num_replicas=device_mesh.get_group('dp').size(), drop_last=True, shuffle=False, seed=seed)
+    test_sampler = DistributedSampler(
+        test_dataset, 
+        num_replicas=device_mesh.get_group('dp').size(), 
+        rank=device_mesh.get_group('dp').rank(),
+        drop_last=True, shuffle=False, seed=seed)
     test_loader = DataLoader(test_dataset, batch_size=14, sampler=test_sampler, drop_last=True, shuffle=False)
 
     model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
@@ -361,7 +369,7 @@ def main():
         # snapshot_job_id="ddpnpp-cpjxq2lxc5sntd",
         # snapshot_epoch=1,
     )
-    trainer.train(max_epochs=50)
+    trainer.train(max_epochs=10)
 
     cleanup()
 
