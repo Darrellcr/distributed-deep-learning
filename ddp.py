@@ -194,7 +194,6 @@ class Trainer:
 
     @torch.no_grad()
     def _evaluate(self, epoch):
-        dist.barrier()
         self.test_data.sampler.set_epoch(epoch)
         local_targets = None
         local_output = None
@@ -271,7 +270,7 @@ def main():
         label_col="diagnosis",
         transform=Normalize(),
     )
-    test_sampler = DistributedSampler(test_dataset, shuffle=True, drop_last=True, seed=seed)
+    test_sampler = DistributedSampler(test_dataset, shuffle=False, drop_last=True, seed=seed)
     test_loader = DataLoader(test_dataset, batch_size=16, sampler=test_sampler, shuffle=False)
     
     model = models.densenet121()

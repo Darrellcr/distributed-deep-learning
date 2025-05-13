@@ -242,7 +242,6 @@ class Trainer:
 
     @torch.no_grad()
     def _evaluate(self, epoch):
-        dist.barrier()
         self.test_data.sampler.set_epoch(epoch)
 
         local_targets = None
@@ -315,7 +314,7 @@ def main():
         label_col="diagnosis",
         transform=Normalize(),
     )
-    train_sampler = DistributedSampler(train_dataset, drop_last=True, shuffle=True, seed=seed)
+    train_sampler = DistributedSampler(train_dataset, num_replicas=device_mesh.get_group('dp').size(), drop_last=True, shuffle=True, seed=seed)
     train_loader = DataLoader(train_dataset, batch_size=14, sampler=train_sampler, drop_last=True, shuffle=False)
 
     test_dataset = AptosDataset(
@@ -325,7 +324,7 @@ def main():
         label_col="diagnosis",
         transform=Normalize(),
     )
-    test_sampler = DistributedSampler(test_dataset, drop_last=True, shuffle=False, seed=seed)
+    test_sampler = DistributedSampler(test_dataset, num_replicas=device_mesh.get_group('dp').size(), drop_last=True, shuffle=False, seed=seed)
     test_loader = DataLoader(test_dataset, batch_size=14, sampler=test_sampler, drop_last=True, shuffle=False)
 
     model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
