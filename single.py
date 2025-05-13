@@ -145,12 +145,12 @@ class Trainer:
 
     def _run_epoch(self, epoch):
         b_sz = len(next(iter(self.train_data))[0])
-        print(f"[GPU{self.global_rank}] Starting Epoch {epoch}")
+        print(f"Starting Epoch {epoch}")
         for source, targets in self.train_data:
             source = source.to(self.device)
             targets = targets.to(self.device)
             self._run_batch(source, targets)
-        print(f"[GPU{self.global_rank}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
+        print(f"Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
 
     def train(self, max_epochs: int):
         for epoch in range(self.epochs_run, max_epochs):
@@ -195,20 +195,20 @@ class Trainer:
         loss = F.cross_entropy(local_output, local_targets)
         print(f"Epoch {epoch} | Validation Loss: {loss.item()}")
 
-        if self.global_rank == 0:
-            self._log_metric("val_loss", loss.item(), epoch)
-            local_output = local_output.detach().cpu().numpy()
-            local_targets = local_targets.detach().cpu().numpy()
-            local_output = np.argmax(local_output, axis=1)
 
-            qwk = cohen_kappa_score(local_targets, local_output, weights="quadratic")
-            print(f"Epoch {epoch} | Validation QWK: {qwk}")
-            self._log_metric("qwk", qwk, epoch)
+        self._log_metric("val_loss", loss.item(), epoch)
+        local_output = local_output.detach().cpu().numpy()
+        local_targets = local_targets.detach().cpu().numpy()
+        local_output = np.argmax(local_output, axis=1)
 
-            if qwk > self.best_qwk:
-                self.best_qwk = qwk
-                print(f"New Best Validation QWK: {self.best_qwk}")
-                return True
+        qwk = cohen_kappa_score(local_targets, local_output, weights="quadratic")
+        print(f"Epoch {epoch} | Validation QWK: {qwk}")
+        self._log_metric("qwk", qwk, epoch)
+
+        if qwk > self.best_qwk:
+            self.best_qwk = qwk
+            print(f"New Best Validation QWK: {self.best_qwk}")
+            return True
             
         return False
 
