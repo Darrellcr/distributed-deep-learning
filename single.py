@@ -21,7 +21,6 @@ from torch.utils.data import Dataset, DataLoader, DistributedSampler
 from torchvision import models, io
 from tqdm import tqdm
 
-import torchx.specs
 
 CHECKPOINT_DIR = "/mnt/dcornelius/checkpoints/single"
 
