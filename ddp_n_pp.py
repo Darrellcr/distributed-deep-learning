@@ -272,10 +272,6 @@ class Trainer:
             loss = F.cross_entropy(all_output, all_targets)
             print(f"Epoch {epoch} | Validation Loss: {loss.item():.4f}")
 
-            print('all_targets')
-            print(all_targets)
-            print('all_output')
-            print(all_output)
             if self.device_mesh.get_group('dp').rank() == 0:
                 self._log_metric("val_loss", loss.item(), epoch)
                 all_targets = all_targets.detach().cpu().numpy()
