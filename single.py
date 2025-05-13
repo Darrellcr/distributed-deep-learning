@@ -21,6 +21,7 @@ from torch.utils.data import Dataset, DataLoader, DistributedSampler
 from torchvision import models, io
 from tqdm import tqdm
 
+import torchx.specs
 
 CHECKPOINT_DIR = "/mnt/dcornelius/checkpoints/single"
 
@@ -145,7 +146,6 @@ class Trainer:
 
     def _run_epoch(self, epoch):
         b_sz = len(next(iter(self.train_data))[0])
-        self.train_data.sampler.set_epoch(epoch)
         print(f"[GPU{self.global_rank}] Starting Epoch {epoch}")
         for source, targets in self.train_data:
             source = source.to(self.device)
@@ -177,7 +177,6 @@ class Trainer:
 
     @torch.no_grad()
     def _evaluate(self, epoch):
-        self.test_data.sampler.set_epoch(epoch)
         local_targets = None
         local_output = None
         for source, targets in self.test_data:
