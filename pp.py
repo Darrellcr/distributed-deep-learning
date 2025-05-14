@@ -126,19 +126,27 @@ class Trainer:
 
         self.model_stage = self.model_stages[self.local_rank]
         self.model_stage.to(self.device)
-        self.optimizer = OptimizerClass(self.model_stage.parameters())
-        if os.path.exists(snapshot_path):
-            print("Loading snapshot")
-            self._load_snapshot(snapshot_path)
-
-        self.is_last_stage = self.global_rank == len(self.model_stages) - 1
-
         self.pipeline_stage = PipelineStage(
             self.model_stage,
             stage_index=self.local_rank,
             num_stages=len(self.model_stages),
             device=self.device,
         )
+        self.optimizer = OptimizerClass(self.model_stage.parameters())
+        self.is_last_stage = self.global_rank == len(self.model_stages) - 1
+       
+       
+        if os.path.exists(snapshot_path):
+            print("Loading snapshot")
+            self._load_snapshot(snapshot_path)
+
+            self.pipeline_stage = PipelineStage(
+                self.model_stage,
+                stage_index=self.local_rank,
+                num_stages=len(self.model_stages),
+                device=self.device,
+            )
+            self.optimizer = OptimizerClass(self.model_stage.parameters())
 
         self.schedule = ScheduleGPipe(
             self.pipeline_stage,
