@@ -253,7 +253,7 @@ def main():
     )
     test_loader = DataLoader(test_dataset, batch_size=30, shuffle=False)
     
-    model = models.densenet121()
+    model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
 
     trainer = Trainer(
         model=model,
@@ -263,7 +263,7 @@ def main():
         # snapshot_job_id=,
         # snapshot_epoch=,
     )
-    trainer.train(max_epochs=2)
+    trainer.train(max_epochs=20)
 
 
 if __name__ == "__main__":
