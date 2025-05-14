@@ -298,13 +298,13 @@ def main():
     g = torch.Generator()
     g.manual_seed(seed)
     train_loader = DataLoader(
-        train_dataset, batch_size=16, drop_last=True, shuffle=True, generator=g
+        train_dataset, batch_size=30, drop_last=True, shuffle=True, generator=g
     )
     test_loader = DataLoader(
-        test_dataset, batch_size=16, drop_last=True, shuffle=True
+        test_dataset, batch_size=30, drop_last=True, shuffle=True
     )
 
-    model = models.densenet121()
+    model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
     print("model initialized")
     stage1 = nn.Sequential(
         model.features.conv0,
@@ -333,11 +333,11 @@ def main():
         train_data=train_loader,
         test_data=test_loader,
         OptimizerClass=optim.Adam,
-        num_microbatches=4,
+        num_microbatches=6,
         # snapshot_job_id=,
         # snapshot_epoch=,
     )
-    trainer.train(max_epochs=3)
+    trainer.train(max_epochs=10)
 
     cleanup()
 

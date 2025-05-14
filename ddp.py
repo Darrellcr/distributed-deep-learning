@@ -276,7 +276,7 @@ def main():
     test_sampler = DistributedSampler(test_dataset, shuffle=False, drop_last=True, seed=seed)
     test_loader = DataLoader(test_dataset, batch_size=16, sampler=test_sampler, shuffle=False)
     
-    model = models.densenet121()
+    model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
 
     trainer = Trainer(
         model=model,
