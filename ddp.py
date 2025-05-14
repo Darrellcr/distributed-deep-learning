@@ -8,7 +8,7 @@ from typing import Iterable, Union
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import cohen_kappa_score
+from sklearn.metrics import cohen_kappa_score, f1_score
 import torch
 from torch import optim, nn
 import torch.distributed as dist
@@ -229,8 +229,11 @@ class Trainer:
             all_output = np.argmax(all_output, axis=1)
 
             qwk = cohen_kappa_score(all_targets, all_output, weights="quadratic")
+            weighted_f1 = f1_score(all_targets, all_output, average="weighted")
             print(f"Epoch {epoch} | Validation QWK: {qwk}")
+            print(f"Epoch {epoch} | Validation Weighted F1: {weighted_f1}")
             self._log_metric("qwk", qwk, epoch)
+            self._log_metric("weighted_f1", weighted_f1, epoch)
 
             if qwk > self.best_qwk:
                 self.best_qwk = qwk
