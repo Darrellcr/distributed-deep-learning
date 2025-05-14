@@ -182,6 +182,7 @@ class Trainer:
         else:
             self.schedule.step()
 
+        nn.utils.clip_grad_norm_(self.model_stage.parameters(), 5.0)
         named_parameters = self.model_stage.named_parameters()
         gradients = next(named_parameters)[1].grad
         print(f"max: {torch.max(gradients)}, min: {torch.min(torch.abs(gradients))}")
@@ -356,7 +357,7 @@ def main():
         # snapshot_job_id=,
         # snapshot_epoch=,
     )
-    trainer.train(max_epochs=10)
+    trainer.train(max_epochs=1)
 
     cleanup()
 
