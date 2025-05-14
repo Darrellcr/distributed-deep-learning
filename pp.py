@@ -15,7 +15,7 @@ import torch.distributed as dist
 import torch.distributed.checkpoint as dcp
 from torch.distributed.checkpoint.stateful import Stateful
 from torch.distributed.checkpoint.state_dict import get_state_dict, set_state_dict
-from torch.distributed.pipelining import ScheduleGPipe, PipelineStage
+from torch.distributed.pipelining import ScheduleGPipe, PipelineStage, pipeline
 from torch.nn import functional as F
 from torch.utils.data import Dataset, DataLoader
 from torchvision import models, io
@@ -126,27 +126,19 @@ class Trainer:
 
         self.model_stage = self.model_stages[self.local_rank]
         self.model_stage.to(self.device)
+        self.optimizer = OptimizerClass(self.model_stage.parameters())
+        self.is_last_stage = self.global_rank == len(self.model_stages) - 1  
+       
+        if os.path.exists(snapshot_path):
+            print("Loading snapshot")
+            self._load_snapshot(snapshot_path)
+
         self.pipeline_stage = PipelineStage(
             self.model_stage,
             stage_index=self.local_rank,
             num_stages=len(self.model_stages),
             device=self.device,
         )
-        self.optimizer = OptimizerClass(self.model_stage.parameters())
-        self.is_last_stage = self.global_rank == len(self.model_stages) - 1
-       
-       
-        if os.path.exists(snapshot_path):
-            print("Loading snapshot")
-            self._load_snapshot(snapshot_path)
-
-            self.pipeline_stage = PipelineStage(
-                self.model_stage,
-                stage_index=self.local_rank,
-                num_stages=len(self.model_stages),
-                device=self.device,
-            )
-            self.optimizer = OptimizerClass(self.model_stage.parameters())
 
         self.schedule = ScheduleGPipe(
             self.pipeline_stage,
@@ -190,6 +182,9 @@ class Trainer:
         else:
             self.schedule.step()
 
+        named_parameters = self.model_stage.named_parameters()
+        gradients = next(named_parameters)[1].grad
+        print(f"max: {torch.max(gradients)}, min: {torch.min(torch.abs(gradients))}")
         self.optimizer.step()
 
     def _run_batch_inference(self, source):
@@ -312,27 +307,43 @@ def main():
         test_dataset, batch_size=30, drop_last=True, shuffle=True
     )
 
-    model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
-    print("model initialized")
+    # model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
+    # print("model initialized")
+    # stage1 = nn.Sequential(
+    #     model.features.conv0,
+    #     model.features.norm0,
+    #     model.features.relu0,
+    #     model.features.pool0,
+    #     model.features.denseblock1,
+    #     model.features.transition1,
+    #     model.features.denseblock2,
+    #     model.features.transition2,
+    # )
+    # stage2 = nn.Sequential(
+    #     model.features.denseblock3,
+    #     model.features.transition3,
+    #     model.features.denseblock4,
+    #     model.features.norm5,
+    #     nn.ReLU(inplace=True),
+    #     nn.AdaptiveAvgPool2d((1, 1)),
+    #     nn.Flatten(),
+    #     model.classifier,
+    # )
+    model = models.resnet101(weights=models.ResNet101_Weights.IMAGENET1K_V1)
     stage1 = nn.Sequential(
-        model.features.conv0,
-        model.features.norm0,
-        model.features.relu0,
-        model.features.pool0,
-        model.features.denseblock1,
-        model.features.transition1,
-        model.features.denseblock2,
-        model.features.transition2,
+        model.conv1,
+        model.bn1,
+        model.relu,
+        model.maxpool,
+        model.layer1,
+        model.layer2,
     )
     stage2 = nn.Sequential(
-        model.features.denseblock3,
-        model.features.transition3,
-        model.features.denseblock4,
-        model.features.norm5,
-        nn.ReLU(inplace=True),
-        nn.AdaptiveAvgPool2d((1, 1)),
+        model.layer3,
+        model.layer4,
+        model.avgpool,
         nn.Flatten(),
-        model.classifier,
+        model.fc,
     )
     model_stages = [stage1, stage2]
 
