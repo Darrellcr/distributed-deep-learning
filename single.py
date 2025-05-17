@@ -201,17 +201,17 @@ class Trainer:
         local_targets = local_targets.detach().cpu().numpy()
         local_output = np.argmax(local_output, axis=1)
 
-        qwk = cohen_kappa_score(local_targets, local_output, weights="quadratic")
-        print(f"Epoch {epoch} | Validation QWK: {qwk}")
-        self._log_metric("qwk", qwk, epoch)
-
         accuracy = accuracy_score(local_targets, local_output)
-        print(f"Epoch {epoch} | Validation Accuracy: {accuracy}")
-        self._log_metric("accuracy", accuracy, epoch)
-
         weighted_f1 = f1_score(local_targets, local_output, average="weighted")
+        qwk = cohen_kappa_score(local_targets, local_output, weights="quadratic")
+
+        print(f"Epoch {epoch} | Validation Accuracy: {accuracy}")
         print(f"Epoch {epoch} | Validation Weighted F1: {weighted_f1}")
+        print(f"Epoch {epoch} | Validation QWK: {qwk}")
+
+        self._log_metric("val_accuracy", accuracy, epoch)
         self._log_metric("weighted_f1", weighted_f1, epoch)
+        self._log_metric("qwk", qwk, epoch)
 
         if qwk > self.best_qwk:
             self.best_qwk = qwk

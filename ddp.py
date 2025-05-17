@@ -8,7 +8,7 @@ from typing import Iterable, Union
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import cohen_kappa_score, f1_score
+from sklearn.metrics import cohen_kappa_score, f1_score, accuracy_score
 import torch
 from torch import optim, nn
 import torch.distributed as dist
@@ -231,10 +231,14 @@ class Trainer:
 
             qwk = cohen_kappa_score(all_targets, all_output, weights="quadratic")
             weighted_f1 = f1_score(all_targets, all_output, average="weighted")
+            accuracy = accuracy_score(all_targets, all_output)
             print(f"Epoch {epoch} | Validation QWK: {qwk}")
             print(f"Epoch {epoch} | Validation Weighted F1: {weighted_f1}")
+            print(f"Epoch {epoch} | Validation Accuracy: {accuracy}")
+
             self._log_metric("qwk", qwk, epoch)
             self._log_metric("weighted_f1", weighted_f1, epoch)
+            self._log_metric("val_accuracy", accuracy, epoch)
 
             if qwk > self.best_qwk:
                 self.best_qwk = qwk
