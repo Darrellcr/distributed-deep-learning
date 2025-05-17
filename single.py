@@ -254,6 +254,8 @@ def main():
     test_loader = DataLoader(test_dataset, batch_size=30, shuffle=False)
     
     model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
+    in_features = model.classifier.in_features
+    model.classifier = nn.Linear(in_features, 5)
 
     trainer = Trainer(
         model=model,

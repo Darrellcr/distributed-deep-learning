@@ -343,6 +343,8 @@ def main():
         model.features.denseblock2,
         model.features.transition2,
     )
+    in_features = model.classifier.in_features
+    classifier = nn.Linear(in_features, 5)
     stage2 = nn.Sequential(
         model.features.denseblock3,
         model.features.transition3,
@@ -351,7 +353,7 @@ def main():
         nn.ReLU(inplace=True),
         nn.AdaptiveAvgPool2d((1, 1)),
         nn.Flatten(),
-        model.classifier,
+        classifier,
     )
     model_stages = [stage1, stage2]
 

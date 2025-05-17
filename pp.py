@@ -128,7 +128,7 @@ class Trainer:
         self.model_stage.to(self.device)
         self.optimizer = OptimizerClass(self.model_stage.parameters())
         self.is_last_stage = self.global_rank == len(self.model_stages) - 1  
-       
+
         if os.path.exists(snapshot_path):
             print("Loading snapshot")
             self._load_snapshot(snapshot_path)
@@ -181,11 +181,7 @@ class Trainer:
             self.epoch_losses.append(losses)
         else:
             self.schedule.step()
-
-        nn.utils.clip_grad_norm_(self.model_stage.parameters(), 5.0)
-        named_parameters = self.model_stage.named_parameters()
-        gradients = next(named_parameters)[1].grad
-        print(f"max: {torch.max(gradients)}, min: {torch.min(torch.abs(gradients))}")
+        
         self.optimizer.step()
 
     def _run_batch_inference(self, source):
@@ -308,43 +304,29 @@ def main():
         test_dataset, batch_size=30, drop_last=True, shuffle=True
     )
 
-    # model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
-    # print("model initialized")
-    # stage1 = nn.Sequential(
-    #     model.features.conv0,
-    #     model.features.norm0,
-    #     model.features.relu0,
-    #     model.features.pool0,
-    #     model.features.denseblock1,
-    #     model.features.transition1,
-    #     model.features.denseblock2,
-    #     model.features.transition2,
-    # )
-    # stage2 = nn.Sequential(
-    #     model.features.denseblock3,
-    #     model.features.transition3,
-    #     model.features.denseblock4,
-    #     model.features.norm5,
-    #     nn.ReLU(inplace=True),
-    #     nn.AdaptiveAvgPool2d((1, 1)),
-    #     nn.Flatten(),
-    #     model.classifier,
-    # )
-    model = models.resnet101(weights=models.ResNet101_Weights.IMAGENET1K_V1)
+    model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
+    print("model initialized")
     stage1 = nn.Sequential(
-        model.conv1,
-        model.bn1,
-        model.relu,
-        model.maxpool,
-        model.layer1,
-        model.layer2,
+        model.features.conv0,
+        model.features.norm0,
+        model.features.relu0,
+        model.features.pool0,
+        model.features.denseblock1,
+        model.features.transition1,
+        model.features.denseblock2,
+        model.features.transition2,
     )
+    in_features = model.classifier.in_features
+    classifier = nn.Linear(in_features, 5)
     stage2 = nn.Sequential(
-        model.layer3,
-        model.layer4,
-        model.avgpool,
+        model.features.denseblock3,
+        model.features.transition3,
+        model.features.denseblock4,
+        model.features.norm5,
+        nn.ReLU(inplace=True),
+        nn.AdaptiveAvgPool2d((1, 1)),
         nn.Flatten(),
-        model.fc,
+        classifier,
     )
     model_stages = [stage1, stage2]
 
