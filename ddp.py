@@ -120,6 +120,8 @@ class Trainer:
         self.optimizer = OptimizerClass(self.model.parameters())
         self.epochs_run = 0
         self.epoch_losses = []
+        self.training_output = None
+        self.training_targets = None
         self.best_qwk = -1
 
         self.model = DDP(self.model, device_ids=[self.local_rank])
@@ -149,7 +151,18 @@ class Trainer:
         self.optimizer.zero_grad()
         output = self.model(source)
         loss = F.cross_entropy(output, targets)
+
+        argmax_output = torch.argmax(output, dim=1)
+        if self.training_output is None:
+            self.training_output = torch.clone(argmax_output)
+        else:
+            self.training_output = torch.cat((self.training_output, argmax_output), dim=0)
+        if self.training_targets is None:
+            self.training_targets = torch.clone(targets)
+        else:
+            self.training_targets = torch.cat((self.training_targets, targets), dim=0)
         self.epoch_losses.append(loss)
+        
         loss.backward()
         self.optimizer.step()
 
@@ -174,6 +187,23 @@ class Trainer:
             self._run_epoch(epoch)
             end_time = perf_counter()
             print(f"Epoch {epoch} | Time: {end_time - start_time:.2f}s")
+
+            all_training_output = [torch.zeros_like(self.training_output, device=self.device) for _ in range(dist.get_world_size())]
+            all_training_targets = [torch.zeros_like(self.training_targets, device=self.device) for _ in range(dist.get_world_size())]
+            dist.all_gather(tensor_list=all_training_output, tensor=self.training_output)
+            dist.all_gather(tensor_list=all_training_targets, tensor=self.training_targets)
+            all_training_output = torch.cat(all_training_output, dim=0)
+            all_training_targets = torch.cat(all_training_targets, dim=0)
+
+            all_training_output = all_training_output.detach().cpu().numpy()
+            all_training_targets = all_training_targets.detach().cpu().numpy()
+            train_accuracy = accuracy_score(all_training_targets, all_training_output)
+            self.training_output = None
+            self.training_targets = None
+
+            if self.global_rank == 0:
+                self._log_metric("train_accuracy", train_accuracy, epoch)
+                print(f"Epoch {epoch} | Training Accuracy: {train_accuracy}")
 
             loss = torch.mean(torch.tensor(self.epoch_losses, device=self.device))
             dist.all_reduce(loss, op=dist.ReduceOp.AVG)

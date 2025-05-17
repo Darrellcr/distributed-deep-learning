@@ -129,6 +129,8 @@ class Trainer:
         self.test_data: DataLoader[torch.Tensor] = test_data
         self.epochs_run = 0
         self.epoch_losses = []
+        self.training_output = None
+        self.training_targets = None
         self.num_microbatches = num_microbatches
 
         self.model_stage = self.model_stages[self.local_rank]
@@ -187,7 +189,17 @@ class Trainer:
             self.schedule.step(source)
         elif self.is_last_stage:
             losses = []
-            self.schedule.step(target=targets, losses=losses)
+            output = self.schedule.step(target=targets, losses=losses)
+
+            argmax_output = torch.argmax(output, dim=1)
+            if self.training_output is None:
+                self.training_output = torch.clone(argmax_output)
+            else:
+                self.training_output = torch.cat((self.training_output, argmax_output), dim=0)
+            if self.training_targets is None:
+                self.training_targets = torch.clone(targets)
+            else:
+                self.training_targets = torch.cat((self.training_targets, targets), dim=0)
             self.epoch_losses.append(losses)
         else:
             self.schedule.step()
@@ -224,12 +236,29 @@ class Trainer:
             if self.is_last_stage: 
                 loss = torch.mean(torch.tensor(self.epoch_losses, device=self.device))
                 dist.all_reduce(loss, op=dist.ReduceOp.AVG, group=self.device_mesh.get_group('dp'))
+                print(f"Epoch {epoch} | Loss: {loss.item():.8f}")
+
+                all_training_output = [torch.zeros_like(self.training_output, device=self.device) 
+                                       for _ in range(self.device_mesh.get_group('dp').size())]
+                all_training_targets = [torch.zeros_like(self.training_targets, device=self.device)
+                                        for _ in range(self.device_mesh.get_group('dp').size())]
+                dist.all_gather(all_training_output, self.training_output, group=self.device_mesh.get_group('dp'))
+                dist.all_gather(all_training_targets, self.training_targets, group=self.device_mesh.get_group('dp'))
+                all_training_output = torch.cat(all_training_output, dim=0)
+                all_training_targets = torch.cat(all_training_targets, dim=0)
+                all_training_output = all_training_output.detach().cpu().numpy()
+                all_training_targets = all_training_targets.detach().cpu().numpy()
+                training_accuracy = accuracy_score(all_training_targets, all_training_output)
+                print(f"Epoch {epoch} | Training Accuracy: {training_accuracy:.4f}")
                 
                 if self.device_mesh.get_group('dp').rank() == 0:
                     self._log_metric("epoch_time", end_time - start_time, epoch)
+                    self._log_metric("training_accuracy", training_accuracy, epoch)
                     self._log_metric("loss", loss.item(), epoch)
 
             self.epoch_losses = []
+            self.training_output = None
+            self.training_targets = None
 
             self.model_stage.eval()
             save_model = torch.tensor(self._evaluate(epoch), device=self.device)

@@ -108,6 +108,8 @@ class Trainer:
         self.optimizer = OptimizerClass(self.model.parameters())
         self.epochs_run = 0
         self.epoch_losses = []
+        self.training_output = None
+        self.training_targets = None
         self.best_qwk = -1
 
         self.snapshot_job_id = snapshot_job_id
@@ -135,7 +137,15 @@ class Trainer:
         self.optimizer.zero_grad()
         output = self.model(source)
         loss = F.cross_entropy(output, targets)
+
+        argmax_output = torch.argmax(output, dim=1)
+        if self.training_output is None:
+            self.training_output = torch.clone(argmax_output)
+        else:
+            self.training_output = torch.cat((self.training_output, argmax_output), dim=0)
+        
         self.epoch_losses.append(loss)
+
         loss.backward()
         self.optimizer.step()
 
@@ -163,6 +173,14 @@ class Trainer:
             print(f"Epoch {epoch} | Loss: {loss.item()}")
             self.epoch_losses = []
 
+            training_output = self.training_output.detach().cpu().numpy()
+            training_targets = self.training_targets.detach().cpu().numpy()
+            training_accuracy = accuracy_score(training_targets, training_output)
+            print(f"Epoch {epoch} | Training Accuracy: {training_accuracy}")
+            self.training_output = None
+            self.training_targets = None
+
+            self._log_metric("train_accuracy", training_accuracy, epoch)
             self._log_metric("epoch_time", end_time - start_time, epoch)
             self._log_metric("loss", loss.item(), epoch)
             

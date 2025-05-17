@@ -120,6 +120,8 @@ class Trainer:
         self.test_data: DataLoader[torch.Tensor] = test_data
         self.epochs_run = 0
         self.epoch_losses = []
+        self.training_output = None
+        self.training_targets = None
         self.snapshot_job_id = snapshot_job_id
         snapshot_path = "" if snapshot_job_id is None else f"{CHECKPOINT_DIR}/{snapshot_job_id}/epoch_{snapshot_epoch}"
         self.num_microbatches = num_microbatches
@@ -177,7 +179,17 @@ class Trainer:
             self.schedule.step(source)
         elif self.is_last_stage:
             losses = []
-            self.schedule.step(target=targets, losses=losses)
+            output = self.schedule.step(target=targets, losses=losses)
+
+            argmax_output = torch.argmax(output, dim=1)
+            if self.training_output is None:
+                self.training_output = torch.clone(argmax_output)
+            else:
+                self.training_output = torch.cat((self.training_output, argmax_output), dim=0)
+            if self.training_targets is None:
+                self.training_targets = torch.clone(targets)
+            else:
+                self.training_targets = torch.cat((self.training_targets, targets), dim=0)
             self.epoch_losses.append(losses)
         else:
             self.schedule.step()
@@ -212,11 +224,20 @@ class Trainer:
             if self.is_last_stage:
                 print(f"Epoch {epoch} | Time: {end_time - start_time:.2f}s")
                 self._log_metric("epoch_time", end_time - start_time, epoch)
+
                 loss = torch.mean(torch.tensor(self.epoch_losses, device=self.device))
                 print(f"Epoch {epoch} | Loss: {loss.item()}")
-                self._log_metric("loss", loss.item(), epoch)
-
                 self.epoch_losses = []
+
+                training_output = self.training_output.detach().cpu().numpy()
+                training_targets = self.training_targets.detach().cpu().numpy()
+                training_accuracy = accuracy_score(training_targets, training_output)
+                print(f"Epoch {epoch} | Training Accuracy: {training_accuracy}")
+                self.training_output = None
+                self.training_targets = None
+                
+                self._log_metric("train_accuracy", training_accuracy, epoch)
+                self._log_metric("loss", loss.item(), epoch)
 
             self.model_stage.eval()
             save_model = torch.tensor(self._evaluate(epoch), device=self.device)
