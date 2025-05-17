@@ -321,7 +321,7 @@ def main():
         num_replicas=device_mesh.get_group('dp').size(), 
         rank=device_mesh.get_group('dp').rank(),
         drop_last=True, shuffle=True, seed=seed)
-    train_loader = DataLoader(train_dataset, batch_size=14, sampler=train_sampler, drop_last=True, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=10, sampler=train_sampler, drop_last=True, shuffle=False, num_workers=2)
 
     test_dataset = AptosDataset(
         csv_file=(dataset_dir / "test.csv"),
@@ -335,7 +335,7 @@ def main():
         num_replicas=device_mesh.get_group('dp').size(), 
         rank=device_mesh.get_group('dp').rank(),
         drop_last=True, shuffle=False, seed=seed)
-    test_loader = DataLoader(test_dataset, batch_size=14, sampler=test_sampler, drop_last=True, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=10, sampler=test_sampler, drop_last=True, shuffle=False, num_workers=2)
 
     model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
     print('model initialized')
@@ -369,7 +369,7 @@ def main():
         test_data=test_loader,
         OptimizerClass=optim.Adam,
         device_mesh=device_mesh,
-        num_microbatches=7,
+        num_microbatches=5,
         # snapshot_job_id="ddpnpp-cpjxq2lxc5sntd",
         # snapshot_epoch=1,
     )

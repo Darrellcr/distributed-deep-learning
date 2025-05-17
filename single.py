@@ -242,7 +242,7 @@ def main():
     )
     g = torch.Generator()
     g.manual_seed(seed)
-    train_loader = DataLoader(train_dataset, batch_size=30, shuffle=True, generator=g)
+    train_loader = DataLoader(train_dataset, batch_size=30, shuffle=True, generator=g, num_workers=2)
 
     test_dataset = AptosDataset(
         csv_file=(dataset_dir / "test.csv"),
@@ -251,7 +251,7 @@ def main():
         label_col="diagnosis",
         transform=Normalize(),
     )
-    test_loader = DataLoader(test_dataset, batch_size=30, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=30, shuffle=False, num_workers=2)
     
     model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
     in_features = model.classifier.in_features
