@@ -143,6 +143,10 @@ class Trainer:
             self.training_output = torch.clone(argmax_output)
         else:
             self.training_output = torch.cat((self.training_output, argmax_output), dim=0)
+        if self.training_targets is None:
+            self.training_targets = torch.clone(targets)
+        else:
+            self.training_targets = torch.cat((self.training_targets, targets), dim=0)
         
         self.epoch_losses.append(loss)
 
