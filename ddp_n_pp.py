@@ -253,7 +253,7 @@ class Trainer:
                 
                 if self.device_mesh.get_group('dp').rank() == 0:
                     self._log_metric("epoch_time", end_time - start_time, epoch)
-                    self._log_metric("training_accuracy", training_accuracy, epoch)
+                    self._log_metric("train_accuracy", training_accuracy, epoch)
                     self._log_metric("loss", loss.item(), epoch)
 
             self.epoch_losses = []
