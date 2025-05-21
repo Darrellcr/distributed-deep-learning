@@ -126,7 +126,7 @@ class Trainer:
         snapshot_path = "" if snapshot_job_id is None else f"{CHECKPOINT_DIR}/{snapshot_job_id}/epoch_{snapshot_epoch}"
         self.num_microbatches = num_microbatches
 
-        self.model_stage = self.model_stages[self.local_rank]
+        self.model_stage = self.model_stages[self.global_rank]
         self.model_stage.to(self.device)
         self.optimizer = OptimizerClass(self.model_stage.parameters())
         self.is_last_stage = self.global_rank == len(self.model_stages) - 1  
@@ -137,7 +137,7 @@ class Trainer:
 
         self.pipeline_stage = PipelineStage(
             self.model_stage,
-            stage_index=self.local_rank,
+            stage_index=self.global_rank,
             num_stages=len(self.model_stages),
             device=self.device,
         )
@@ -175,7 +175,7 @@ class Trainer:
     def _run_batch(self, source, targets):
         self.optimizer.zero_grad()
 
-        if self.local_rank == 0:
+        if self.global_rank == 0:
             self.schedule.step(source)
         elif self.is_last_stage:
             losses = []
@@ -197,7 +197,7 @@ class Trainer:
         self.optimizer.step()
 
     def _run_batch_inference(self, source):
-        if self.local_rank == 0:
+        if self.global_rank == 0:
             output = self.schedule_inference.step(source)
         else:
             output = self.schedule_inference.step()
@@ -209,8 +209,10 @@ class Trainer:
         print(f"[GPU{self.global_rank}] Starting Epoch {epoch}")
         print('batch size:', b_sz)
         for source, targets in self.train_data:
-            source = source.to('cuda:0')
-            targets = targets.to(f'cuda:{torch.cuda.device_count() - 1}')
+            if self.global_rank == 0:
+                source = source.to(self.device)
+            if self.is_last_stage:
+                targets = targets.to(self.device)
             self._run_batch(source, targets)
         print(
             f"[GPU{self.global_rank}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
@@ -253,8 +255,10 @@ class Trainer:
         merged_targets = None
         merged_output = None
         for source, targets in self.test_data:
-            source = source.to('cuda:0')
-            targets = targets.to(f'cuda:{torch.cuda.device_count() - 1}')
+            if self.global_rank == 0:
+                source = source.to(self.device)
+            if self.is_last_stage:
+                targets = targets.to(self.device)
             output = self._run_batch_inference(source)
 
             if self.is_last_stage:
