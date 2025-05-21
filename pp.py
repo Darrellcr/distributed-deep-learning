@@ -366,7 +366,7 @@ def main():
         train_data=train_loader,
         test_data=test_loader,
         OptimizerClass=optim.Adam,
-        num_microbatches=6,
+        num_microbatches=5,
         # snapshot_job_id=,
         # snapshot_epoch=,
     )
