@@ -195,10 +195,7 @@ class Trainer:
         else:
             self.schedule.step()
 
-        gradients = [torch.flatten(p.grad) for _, p in self.model_stage.named_parameters() if p.grad is not None]
-        avg_grad_magnitude = torch.median(torch.cat(gradients).abs())
-        print(f"[GPU{self.global_rank}] Avg gradient magnitude: {avg_grad_magnitude.item()}")
-        self._log_metric(f"avg_grad_magnitude{self.global_rank}", avg_grad_magnitude.item(), self.epochs_run, step)
+        self._log_gradient(step)
         
         self.optimizer.step()
 
@@ -302,18 +299,31 @@ class Trainer:
             
         return False
 
-    def _log_metric(self, metric, value, epoch, step=None):
+    def _log_metric(self, metric, value, epoch):
         with open(f"/mnt/dcornelius/training_logs/{metric}.csv", "a") as f:
             writer = csv.writer(f)
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             model_start_job_id = self.snapshot_job_id if self.snapshot_job_id else self.job_id
-            if step is None:
-                row = [now, self.job_id, self.global_rank, self.local_rank, model_start_job_id, epoch, value]
-            else:
-                row = [now, self.job_id, self.global_rank, self.local_rank, model_start_job_id, epoch, step, value]
-                
+            row = [now, self.job_id, self.global_rank, self.local_rank, model_start_job_id, epoch, value]
             writer.writerow(row)
     
+    def _log_gradient(self, step):
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(f"/mnt/dcornelius/training_logs/gradients.csv", "a") as f:
+            writer = csv.writer(f)
+            for i, (name, param) in enumerate(self.model_stage.named_parameters()):
+                if param.grad is None: 
+                    continue
+                
+                min_grad = param.grad.abs().min()
+                mean_grad = param.grad.abs().mean()
+                max_grad = param.grad.abs().max()
+                percentile25th = torch.quantile(param.grad.abs(), 0.25)
+                median_grad = param.grad.abs().median()
+                percentile75th = torch.quantile(param.grad.abs(), 0.75)
+                std_grad = param.grad.abs().std()
+                row = [now, self.job_id, self.global_rank, self.local_rank, step, i, name, min_grad.item(), mean_grad.item(), max_grad.item(), percentile25th.item(), median_grad.item(), percentile75th.item(), std_grad.item()]
+                writer.writerow(row)
             
 
 def main():
