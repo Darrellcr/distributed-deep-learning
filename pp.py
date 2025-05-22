@@ -196,7 +196,7 @@ class Trainer:
             self.schedule.step()
 
         gradients = [torch.flatten(p.grad) for _, p in self.model_stage.named_parameters() if p.grad is not None]
-        avg_grad_magnitude = torch.mean(torch.cat(gradients).abs())
+        avg_grad_magnitude = torch.median(torch.cat(gradients).abs())
         print(f"[GPU{self.global_rank}] Avg gradient magnitude: {avg_grad_magnitude.item()}")
         self._log_metric(f"avg_grad_magnitude{self.global_rank}", avg_grad_magnitude.item(), self.epochs_run, step)
         
