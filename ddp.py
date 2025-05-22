@@ -163,10 +163,10 @@ class Trainer:
             self.training_targets = torch.cat((self.training_targets, targets), dim=0)
         self.epoch_losses.append(loss)
 
+        loss.backward()
         if self.global_rank == 0:
             self._log_gradient(step)
         
-        loss.backward()
         self.optimizer.step()
 
     def _run_batch_inference(self, source, targets):
