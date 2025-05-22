@@ -172,7 +172,7 @@ class Trainer:
         print(
             f"Epoch {epoch} | Training snapshot saved at {save_path}")
 
-    def _run_batch(self, source, targets):
+    def _run_batch(self, source, targets, step=None):
         self.optimizer.zero_grad()
 
         if self.global_rank == 0:
@@ -193,6 +193,11 @@ class Trainer:
             self.epoch_losses.append(losses)
         else:
             self.schedule.step()
+
+        gradients = [torch.flatten(p.grad) for _, p in self.model_stage.named_parameters() if p.grad is not None]
+        avg_grad_magnitude = torch.mean(torch.cat(gradients).abs())
+        print(f"[GPU{self.global_rank}] Avg gradient magnitude: {avg_grad_magnitude.item()}")
+        self._log_metric("avg_grad_magnitude", avg_grad_magnitude.item(), self.epochs_run, step)
         
         self.optimizer.step()
 
@@ -208,12 +213,12 @@ class Trainer:
         b_sz = len(next(iter(self.train_data))[0])
         print(f"[GPU{self.global_rank}] Starting Epoch {epoch}")
         print('batch size:', b_sz)
-        for source, targets in self.train_data:
+        for step, (source, targets) in enumerate(self.train_data):
             if self.global_rank == 0:
                 source = source.to(self.device)
             if self.is_last_stage:
                 targets = targets.to(self.device)
-            self._run_batch(source, targets)
+            self._run_batch(source, targets, step=step)
         print(
             f"[GPU{self.global_rank}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
     
@@ -296,12 +301,17 @@ class Trainer:
             
         return False
 
-    def _log_metric(self, metric, value, epoch):
+    def _log_metric(self, metric, value, epoch, step=None):
         with open(f"/mnt/dcornelius/training_logs/{metric}.csv", "a") as f:
             writer = csv.writer(f)
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             model_start_job_id = self.snapshot_job_id if self.snapshot_job_id else self.job_id
-            writer.writerow([now, self.job_id, self.global_rank, self.local_rank, model_start_job_id, epoch, value])
+            if step is None:
+                row = [now, self.job_id, self.global_rank, self.local_rank, model_start_job_id, epoch, value]
+            else:
+                row = [now, self.job_id, self.global_rank, self.local_rank, model_start_job_id, epoch, step, value]
+                
+            writer.writerow(row)
     
             
 
