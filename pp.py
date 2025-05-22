@@ -5,6 +5,7 @@ from pathlib import Path
 import random
 from time import perf_counter
 from typing import Union, Iterable
+import fcntl
 
 import numpy as np
 import pandas as pd
@@ -197,7 +198,7 @@ class Trainer:
         gradients = [torch.flatten(p.grad) for _, p in self.model_stage.named_parameters() if p.grad is not None]
         avg_grad_magnitude = torch.mean(torch.cat(gradients).abs())
         print(f"[GPU{self.global_rank}] Avg gradient magnitude: {avg_grad_magnitude.item()}")
-        self._log_metric("avg_grad_magnitude", avg_grad_magnitude.item(), self.epochs_run, step)
+        self._log_metric(f"avg_grad_magnitude{self.global_rank}", avg_grad_magnitude.item(), self.epochs_run, step)
         
         self.optimizer.step()
 
