@@ -289,7 +289,7 @@ class Trainer:
 
     def _log_gradient(self, step):
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        with open(f"/mnt/dcornelius/training_logs/gradients{self.global_rank}.csv", "a") as f:
+        with open(f"/mnt/dcornelius/training_logs/gradient.csv", "a") as f:
             writer = csv.writer(f)
             for i, (name, param) in enumerate(self.model.named_parameters()):
                 if param.grad is None: 
