@@ -351,7 +351,11 @@ def main():
     )
 
     model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
-    input_sample = next(iter(train_loader))[0]
+    features_in = model.classifier.in_features
+    model.classifier = nn.Linear(features_in, 5)
+
+    num_microbatches = 5
+    input_sample = next(iter(train_loader))[0][:num_microbatches]
     pipe = pipeline(
         model,
         mb_args=(input_sample,),
@@ -366,7 +370,7 @@ def main():
         train_data=train_loader,
         test_data=test_loader,
         OptimizerClass=optim.Adam,
-        num_microbatches=5,
+        num_microbatches=num_microbatches,
         # snapshot_job_id=,
         # snapshot_epoch=,
     )
