@@ -15,7 +15,7 @@ import torch.distributed as dist
 import torch.distributed.checkpoint as dcp
 from torch.distributed.checkpoint.stateful import Stateful
 from torch.distributed.checkpoint.state_dict import get_state_dict, set_state_dict
-from torch.distributed.pipelining import ScheduleGPipe, pipeline, SplitPoint, build_stage, Pipe
+from torch.distributed.pipelining import ScheduleGPipe, pipeline, SplitPoint, build_stage, Pipe, PipelineStage
 from torch.nn import functional as F
 from torch.utils.data import Dataset, DataLoader
 from torchvision import models, io
@@ -136,6 +136,12 @@ class Trainer:
             self._load_snapshot(snapshot_path)
 
         stage = build_stage(self.stage_mod, self.global_rank, self.pipe.info(), self.device)
+        stage = PipelineStage(
+            stage,
+            mb_size=self.num_microbatches,
+            split_spec=SplitPoint.END,  # Use the end of the stage as the split point
+            device=self.device,
+        )
 
         self.schedule = ScheduleGPipe(
             stage,

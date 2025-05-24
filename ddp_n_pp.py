@@ -136,7 +136,8 @@ class Trainer:
         self.stage_mod = pipe.get_stage_module(self.local_rank)
         self.stage_mod.to(self.device)
         self.optimizer = OptimizerClass(self.stage_mod.parameters())
-        self.stage_mod = DDP(self.stage_mod, process_group=self.device_mesh.get_group('dp'))
+        dp_mod = DDP(self.stage_mod, process_group=self.device_mesh.get_group('dp'))
+        dp_mod.graph = self.stage_mod.graph
         self.is_last_stage = self.local_rank == self.pipe.num_stages - 1
 
         self.snapshot_job_id = snapshot_job_id
@@ -146,7 +147,7 @@ class Trainer:
             self._load_snapshot(snapshot_path)
 
         stage = build_stage(
-            self.stage_mod, 
+            dp_mod, 
             stage_index=self.local_rank, 
             pipe_info=self.pipe.info(), 
             device=self.device,
@@ -160,7 +161,7 @@ class Trainer:
         )
 
         stage = build_stage(
-            self.stage_mod, 
+            dp_mod, 
             stage_index=self.local_rank, 
             pipe_info=self.pipe.info(), 
             device=self.device,
