@@ -356,7 +356,7 @@ def main():
     model.classifier = nn.Linear(features_in, 5)
 
     num_microbatches = 5
-    input_sample = next(iter(train_loader))[0][:batch_size/num_microbatches]
+    input_sample = next(iter(train_loader))[0][:batch_size//num_microbatches]
     pipe = pipeline(
         model,
         mb_args=(input_sample,),
