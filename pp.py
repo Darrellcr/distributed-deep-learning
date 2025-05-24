@@ -243,7 +243,7 @@ class Trainer:
             self.schedule
             save_model = torch.tensor(self._evaluate(epoch), device=self.device)
             self.stage_mod.train()
-            dist.broadcast(save_model, src=len(self.pipe.num_stages) - 1)
+            dist.broadcast(save_model, src=self.pipe.num_stages - 1)
 
             if save_model:
                 print(f"Saving model at epoch {epoch}")
