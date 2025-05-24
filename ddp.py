@@ -164,8 +164,8 @@ class Trainer:
         self.epoch_losses.append(loss)
 
         loss.backward()
-        if self.global_rank == 0:
-            self._log_gradient(step)
+        # if self.global_rank == 0:
+        #     self._log_gradient(step)
         
         self.optimizer.step()
 

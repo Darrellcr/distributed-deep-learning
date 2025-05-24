@@ -189,8 +189,6 @@ class Trainer:
             self.epoch_losses.append(losses)
         else:
             self.schedule.step()
-
-        self._log_gradient(step)
         
         self.optimizer.step()
 
