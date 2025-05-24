@@ -142,7 +142,8 @@ class Trainer:
             n_microbatches=self.num_microbatches,
             loss_fn=F.cross_entropy,
         )
-
+        
+        stage = build_stage(self.stage_mod, self.global_rank, self.pipe.info(), self.device)
         self.schedule_inference = ScheduleGPipe(
             stage,
             n_microbatches=1,
