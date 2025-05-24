@@ -194,11 +194,11 @@ class Trainer:
         
         self.optimizer.step()
 
-    def _run_batch_inference(self, source, targets):
+    def _run_batch_inference(self, source):
         if self.global_rank == 0:
             output = self.schedule_inference.step(source)
         else:
-            output = self.schedule_inference.step(target=targets)
+            output = self.schedule_inference.step()
 
         return output
         
@@ -258,7 +258,7 @@ class Trainer:
                 source = source.to(self.device)
             if self.is_last_stage:
                 targets = targets.to(self.device)
-            output = self._run_batch_inference(source, targets)
+            output = self._run_batch_inference(source)
 
             if self.is_last_stage:
                 if merged_targets is None:

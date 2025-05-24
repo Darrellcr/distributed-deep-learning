@@ -16,7 +16,7 @@ import torch.distributed.checkpoint as dcp
 from torch.distributed.checkpoint.stateful import Stateful
 from torch.distributed.checkpoint.state_dict import get_state_dict, set_state_dict
 from torch.distributed.device_mesh import init_device_mesh, DeviceMesh
-from torch.distributed.pipelining import SplitPoint, ScheduleGPipe, PipelineStage
+from torch.distributed.pipelining import SplitPoint, ScheduleGPipe, pipeline, build_stage, Pipe
 from torch.nn import functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import Dataset, DataLoader, DistributedSampler
@@ -109,7 +109,7 @@ class AppState(Stateful):
 class Trainer:
     def __init__(
         self,
-        model_stages: list[torch.nn.Module],
+        pipe: Pipe,
         train_data: DataLoader,
         test_data: DataLoader,
         OptimizerClass: type[optim.Optimizer],
@@ -124,7 +124,6 @@ class Trainer:
         self.device = torch.device(f'cuda:{self.local_rank}')
         self.device_mesh = device_mesh
 
-        self.model_stages = model_stages
         self.train_data: DataLoader[torch.Tensor] = train_data
         self.test_data: DataLoader[torch.Tensor] = test_data
         self.epochs_run = 0
@@ -133,11 +132,12 @@ class Trainer:
         self.training_targets = None
         self.num_microbatches = num_microbatches
 
-        self.model_stage = self.model_stages[self.local_rank]
-        self.model_stage.to(self.device)
-        self.optimizer = OptimizerClass(self.model_stage.parameters())
-        self.model_stage = DDP(self.model_stage, process_group=self.device_mesh.get_group('dp'))
-        self.is_last_stage = self.local_rank == len(self.model_stages) - 1
+        self.pipe = pipe
+        self.stage_mod = pipe.get_stage_module(self.local_rank)
+        self.stage_mod.to(self.device)
+        self.optimizer = OptimizerClass(self.stage_mod.parameters())
+        self.stage_mod = DDP(self.stage_mod, process_group=self.device_mesh.get_group('dp'))
+        self.is_last_stage = self.local_rank == self.pipe.num_stages - 1
 
         self.snapshot_job_id = snapshot_job_id
         snapshot_path = "" if snapshot_job_id is None else CHECKPOINT_DIR + f"/{snapshot_job_id}/epoch_{snapshot_epoch}"
@@ -145,36 +145,44 @@ class Trainer:
             print("Loading snapshot")
             self._load_snapshot(snapshot_path)
 
-        self.pipeline_stage = PipelineStage(
-            self.model_stage,
-            stage_index=self.local_rank,
-            num_stages=len(self.model_stages),
+        stage = build_stage(
+            self.stage_mod, 
+            stage_index=self.local_rank, 
+            pipe_info=self.pipe.info(), 
             device=self.device,
             group=self.device_mesh.get_group('pp'),
         )
 
         self.schedule = ScheduleGPipe(
-            self.pipeline_stage,
+            stage,
             n_microbatches=self.num_microbatches,
             loss_fn=F.cross_entropy,
         )
 
+        stage = build_stage(
+            self.stage_mod, 
+            stage_index=self.local_rank, 
+            pipe_info=self.pipe.info(), 
+            device=self.device,
+            group=self.device_mesh.get_group('pp'),
+        )
+
         self.schedule_inference = ScheduleGPipe(
-            self.pipeline_stage,
+            stage,
             n_microbatches=self.num_microbatches,
         )
 
         self.best_qwk = -1
 
     def _load_snapshot(self, snapshot_path):
-        state_dict = {"app": AppState(self.epochs_run, self.model_stage, self.optimizer, self.local_rank)}
+        state_dict = {"app": AppState(self.epochs_run, self.stage_mod, self.optimizer, self.local_rank)}
         dcp.load(state_dict, checkpoint_id=f"{snapshot_path}")
         self.epochs_run = state_dict["app"].epoch + 1
 
         print(f"Resuming training from snapshot at Epoch {self.epochs_run}")
 
     def _save_snapshot(self, epoch):
-        state_dict = {"app": AppState(epoch, self.model_stage, self.optimizer, self.local_rank)}
+        state_dict = {"app": AppState(epoch, self.stage_mod, self.optimizer, self.local_rank)}
         save_path = CHECKPOINT_DIR + f"/{self.job_id}/epoch_{epoch}"
         os.makedirs(save_path, exist_ok=True)
 
@@ -260,9 +268,9 @@ class Trainer:
             self.training_output = None
             self.training_targets = None
 
-            self.model_stage.eval()
+            self.stage_mod.eval()
             save_model = torch.tensor(self._evaluate(epoch), device=self.device)
-            self.model_stage.train()
+            self.stage_mod.train()
             dist.broadcast(save_model, src=self.device_mesh.mesh[0][-1])
 
             if save_model:
@@ -338,6 +346,7 @@ def main():
     set_seed(seed)
     dataset_dir = Path("/mnt/dcornelius/preprocessed-aptos")
 
+    batch_size = 10
     train_dataset = AptosDataset(
         csv_file=(dataset_dir / "train.csv"),
         root_dir=(dataset_dir / "train_images"),
@@ -350,7 +359,7 @@ def main():
         num_replicas=device_mesh.get_group('dp').size(), 
         rank=device_mesh.get_group('dp').rank(),
         drop_last=True, shuffle=True, seed=seed)
-    train_loader = DataLoader(train_dataset, batch_size=10, sampler=train_sampler, drop_last=True, shuffle=False, num_workers=2)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler, drop_last=True, shuffle=False, num_workers=2)
 
     test_dataset = AptosDataset(
         csv_file=(dataset_dir / "test.csv"),
@@ -364,36 +373,26 @@ def main():
         num_replicas=device_mesh.get_group('dp').size(), 
         rank=device_mesh.get_group('dp').rank(),
         drop_last=True, shuffle=False, seed=seed)
-    test_loader = DataLoader(test_dataset, batch_size=10, sampler=test_sampler, drop_last=True, shuffle=False, num_workers=2)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, sampler=test_sampler, drop_last=True, shuffle=False, num_workers=2)
 
     model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
+    features_in = model.classifier.in_features
+    model.classifier = nn.Linear(features_in, 5)
+
+    num_microbatches = 5
+    input_sample = next(iter(train_loader))[0][:batch_size//num_microbatches]
+    pipe = pipeline(
+        model,
+        mb_args=(input_sample,),
+        split_spec={
+            "features.denseblock3.denselayer22": SplitPoint.END,
+        }
+    )
     print('model initialized')
-    stage1 = nn.Sequential(
-        model.features.conv0,
-        model.features.norm0,
-        model.features.relu0,
-        model.features.pool0,
-        model.features.denseblock1,
-        model.features.transition1,
-        model.features.denseblock2,
-        model.features.transition2,
-    )
-    in_features = model.classifier.in_features
-    classifier = nn.Linear(in_features, 5)
-    stage2 = nn.Sequential(
-        model.features.denseblock3,
-        model.features.transition3,
-        model.features.denseblock4,
-        model.features.norm5,
-        nn.ReLU(inplace=True),
-        nn.AdaptiveAvgPool2d((1, 1)),
-        nn.Flatten(),
-        classifier,
-    )
-    model_stages = [stage1, stage2]
+    
 
     trainer = Trainer(
-        model_stages=model_stages,
+        pipe=pipe,
         train_data=train_loader,
         test_data=test_loader,
         OptimizerClass=optim.Adam,
