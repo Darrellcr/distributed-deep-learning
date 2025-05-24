@@ -143,6 +143,11 @@ class Trainer:
             loss_fn=F.cross_entropy,
         )
 
+        self.schedule_inference = ScheduleGPipe(
+            stage,
+            n_microbatches=1,
+        )
+
         self.best_qwk = -1
 
     def _load_snapshot(self, snapshot_path):
@@ -190,9 +195,9 @@ class Trainer:
 
     def _run_batch_inference(self, source, targets):
         if self.global_rank == 0:
-            output = self.schedule.step(source)
+            output = self.schedule_inference.step(source)
         else:
-            output = self.schedule.step(target=targets)
+            output = self.schedule_inference.step(target=targets)
 
         return output
         
@@ -234,6 +239,7 @@ class Trainer:
                 self._log_metric("loss", loss.item(), epoch)
 
             self.stage_mod.eval()
+            self.schedule
             save_model = torch.tensor(self._evaluate(epoch), device=self.device)
             self.stage_mod.train()
             dist.broadcast(save_model, src=len(self.pipe.num_stages) - 1)
