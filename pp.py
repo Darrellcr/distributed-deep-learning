@@ -143,11 +143,6 @@ class Trainer:
             loss_fn=F.cross_entropy,
         )
 
-        self.schedule_inference = ScheduleGPipe(
-            stage,
-            n_microbatches=self.num_microbatches,
-        )
-
         self.best_qwk = -1
 
     def _load_snapshot(self, snapshot_path):
@@ -195,9 +190,9 @@ class Trainer:
 
     def _run_batch_inference(self, source):
         if self.global_rank == 0:
-            output = self.schedule_inference.step(source)
+            output = self.schedule.step(source)
         else:
-            output = self.schedule_inference.step()
+            output = self.schedule.step()
 
         return output
         
