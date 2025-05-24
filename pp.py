@@ -5,7 +5,6 @@ from pathlib import Path
 import random
 from time import perf_counter
 from typing import Union, Iterable
-import fcntl
 
 import numpy as np
 import pandas as pd
@@ -16,7 +15,7 @@ import torch.distributed as dist
 import torch.distributed.checkpoint as dcp
 from torch.distributed.checkpoint.stateful import Stateful
 from torch.distributed.checkpoint.state_dict import get_state_dict, set_state_dict
-from torch.distributed.pipelining import ScheduleGPipe, PipelineStage, pipeline
+from torch.distributed.pipelining import ScheduleGPipe, pipeline, SplitPoint, build_stage, Pipe
 from torch.nn import functional as F
 from torch.utils.data import Dataset, DataLoader
 from torchvision import models, io
@@ -103,7 +102,7 @@ class AppState(Stateful):
 class Trainer:
     def __init__(
         self,
-        model_stages: list[torch.nn.Module],
+        pipe: Pipe,
         OptimizerClass: type[optim.Optimizer],
         train_data: DataLoader,
         test_data: DataLoader,
@@ -116,7 +115,6 @@ class Trainer:
         self.local_rank = self.global_rank % torch.cuda.device_count()
         self.device = torch.device(f'cuda:{self.local_rank}')
 
-        self.model_stages = model_stages
         self.train_data: DataLoader[torch.Tensor] = train_data
         self.test_data: DataLoader[torch.Tensor] = test_data
         self.epochs_run = 0
@@ -127,44 +125,40 @@ class Trainer:
         snapshot_path = "" if snapshot_job_id is None else f"{CHECKPOINT_DIR}/{snapshot_job_id}/epoch_{snapshot_epoch}"
         self.num_microbatches = num_microbatches
 
-        self.model_stage = self.model_stages[self.global_rank]
-        self.model_stage.to(self.device)
-        self.optimizer = OptimizerClass(self.model_stage.parameters())
-        self.is_last_stage = self.global_rank == len(self.model_stages) - 1  
+        self.pipe = pipe
+        self.stage_mod = pipe.get_stage_module(self.global_rank)
+        self.stage_mod.to(self.device)
+        self.optimizer = OptimizerClass(self.stage_mod.parameters())
+        self.is_last_stage = self.global_rank == pipe.num_stages - 1  
 
         if os.path.exists(snapshot_path):
             print("Loading snapshot")
             self._load_snapshot(snapshot_path)
 
-        self.pipeline_stage = PipelineStage(
-            self.model_stage,
-            stage_index=self.global_rank,
-            num_stages=len(self.model_stages),
-            device=self.device,
-        )
+        stage = build_stage(self.stage_mod, self.global_rank, self.pipe.info(), self.device)
 
         self.schedule = ScheduleGPipe(
-            self.pipeline_stage,
+            stage,
             n_microbatches=self.num_microbatches,
             loss_fn=F.cross_entropy,
         )
 
         self.schedule_inference = ScheduleGPipe(
-            self.pipeline_stage,
+            stage,
             n_microbatches=self.num_microbatches,
         )
 
         self.best_qwk = -1
 
     def _load_snapshot(self, snapshot_path):
-        state_dict = {f"app": AppState(self.epochs_run, self.model_stage, self.optimizer, self.global_rank)}
+        state_dict = {f"app": AppState(self.epochs_run, self.stage_mod, self.optimizer, self.global_rank)}
         dcp.load(state_dict, checkpoint_id=f"{snapshot_path}")
         self.epochs_run = state_dict[f"app"].epoch + 1
         
         print(f"Resuming training from snapshot at Epoch {self.epochs_run}")
 
     def _save_snapshot(self, epoch: int):
-        state_dict = {f"app": AppState(epoch, self.model_stage, self.optimizer, self.global_rank)}
+        state_dict = {f"app": AppState(epoch, self.stage_mod, self.optimizer, self.global_rank)}
         save_path = CHECKPOINT_DIR + f"/{self.job_id}/epoch_{epoch}"
         os.makedirs(save_path, exist_ok=True)
 
@@ -244,10 +238,10 @@ class Trainer:
                 self._log_metric("train_accuracy", training_accuracy, epoch)
                 self._log_metric("loss", loss.item(), epoch)
 
-            self.model_stage.eval()
+            self.stage_mod.eval()
             save_model = torch.tensor(self._evaluate(epoch), device=self.device)
-            self.model_stage.train()
-            dist.broadcast(save_model, src=len(self.model_stages) - 1)
+            self.stage_mod.train()
+            dist.broadcast(save_model, src=len(self.pipe.num_stages) - 1)
 
             if save_model:
                 print(f"Saving model at epoch {epoch}")
@@ -311,7 +305,7 @@ class Trainer:
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with open(f"/mnt/dcornelius/training_logs/gradients{self.global_rank}.csv", "a") as f:
             writer = csv.writer(f)
-            for i, (name, param) in enumerate(self.model_stage.named_parameters()):
+            for i, (name, param) in enumerate(self.stage_mod.named_parameters()):
                 if param.grad is None: 
                     continue
                 
@@ -357,33 +351,18 @@ def main():
     )
 
     model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
+    input_sample = next(iter(train_loader))[0]
+    pipe = pipeline(
+        model,
+        mb_args=(input_sample,),
+        split_spec={
+            "features.denseblock3.denselayer22": SplitPoint.END,
+        }
+    )
     print("model initialized")
-    stage1 = nn.Sequential(
-        model.features.conv0,
-        model.features.norm0,
-        model.features.relu0,
-        model.features.pool0,
-        model.features.denseblock1,
-        model.features.transition1,
-        model.features.denseblock2,
-        model.features.transition2,
-    )
-    in_features = model.classifier.in_features
-    classifier = nn.Linear(in_features, 5)
-    stage2 = nn.Sequential(
-        model.features.denseblock3,
-        model.features.transition3,
-        model.features.denseblock4,
-        model.features.norm5,
-        nn.ReLU(inplace=True),
-        nn.AdaptiveAvgPool2d((1, 1)),
-        nn.Flatten(),
-        classifier,
-    )
-    model_stages = [stage1, stage2]
 
     trainer = Trainer(
-        model_stages=model_stages,
+        pipe=pipe,
         train_data=train_loader,
         test_data=test_loader,
         OptimizerClass=optim.Adam,
