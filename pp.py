@@ -361,7 +361,7 @@ def main():
         model,
         mb_args=(input_sample,),
         split_spec={
-            "features.denseblock3.denselayer22": SplitPoint.END,
+            "features.denseblock3.denselayer1": SplitPoint.BEGINNING,
         }
     )
     print("model initialized")
