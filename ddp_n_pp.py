@@ -398,7 +398,7 @@ def main():
         test_data=test_loader,
         OptimizerClass=optim.Adam,
         device_mesh=device_mesh,
-        num_microbatches=5,
+        num_microbatches=num_microbatches,
         # snapshot_job_id="ddpnpp-cpjxq2lxc5sntd",
         # snapshot_epoch=1,
     )
