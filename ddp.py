@@ -312,6 +312,7 @@ def main():
     set_seed(seed)
 
     dataset_dir = Path("/mnt/dcornelius/preprocessed-aptos")
+    batch_size = 15
     train_dataset = AptosDataset(
         csv_file=(dataset_dir / "train.csv"),
         root_dir=(dataset_dir / "train_images"),
@@ -320,7 +321,7 @@ def main():
         transform=Normalize(),
     )
     train_sampler = DistributedSampler(train_dataset, shuffle=True, drop_last=True, seed=seed)
-    train_loader = DataLoader(train_dataset, batch_size=15, sampler=train_sampler, shuffle=False, num_workers=2)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler, shuffle=False, num_workers=2)
 
     test_dataset = AptosDataset(
         csv_file=(dataset_dir / "test.csv"),
@@ -330,7 +331,7 @@ def main():
         transform=Normalize(),
     )
     test_sampler = DistributedSampler(test_dataset, shuffle=False, drop_last=True, seed=seed)
-    test_loader = DataLoader(test_dataset, batch_size=15, sampler=test_sampler, shuffle=False, num_workers=2)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, sampler=test_sampler, shuffle=False, num_workers=2)
     
     model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
     in_features = model.classifier.in_features
