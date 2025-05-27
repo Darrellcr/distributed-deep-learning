@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import cohen_kappa_score, f1_score, accuracy_score
 import torch
-from torch import optim, nn
+from torch import optim, nn, profiler
 import torch.distributed as dist
 import torch.distributed.checkpoint as dcp
 from torch.distributed.checkpoint.stateful import Stateful
@@ -204,18 +204,35 @@ class Trainer:
         b_sz = len(next(iter(self.train_data))[0])
         print(f"[GPU{self.global_rank}] Starting Epoch {epoch}")
         print('batch size:', b_sz)
-        for step, (source, targets) in enumerate(self.train_data):
-            if self.global_rank == 0:
-                source = source.to(self.device)
-            if self.is_last_stage:
-                targets = targets.to(self.device)
-            self._run_batch(source, targets, step=step)
+        if epoch == 0:
+            with profiler.profile(
+                activities=[profiler.ProfilerActivity.CPU, profiler.ProfilerActivity.CUDA],
+                record_shapes=True,
+                profile_memory=True,
+                with_stack=True,
+                schedule=profiler.schedule(wait=2, warmup=2, active=5, repeat=2),
+                on_trace_ready=profiler.tensorboard_trace_handler(f'/mnt/dcornelius/tensorboard/{self.job_id}', worker_name=f'worker{self.global_rank}')
+            ) as prof:
+                for step, (source, targets) in enumerate(self.train_data):
+                    prof.step()
+                    if self.global_rank == 0:
+                        source = source.to(self.device)
+                    if self.is_last_stage:
+                        targets = targets.to(self.device)
+                    self._run_batch(source, targets, step=step)
+        else:
+            for step, (source, targets) in enumerate(self.train_data):
+                if self.global_rank == 0:
+                    source = source.to(self.device)
+                if self.is_last_stage:
+                    targets = targets.to(self.device)
+                self._run_batch(source, targets, step=step)
         print(
             f"[GPU{self.global_rank}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
     
     def train(self, max_epochs: int):
         for epoch in range(self.epochs_run, max_epochs):
-            start_time = perf_counter()
+            start_time = perf_counter()    
             self._run_epoch(epoch)
             end_time = perf_counter()
 
