@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import cohen_kappa_score, f1_score, accuracy_score
 import torch
-from torch import optim, nn
+from torch import optim, nn, profiler
 import torch.distributed as dist
 import torch.distributed.checkpoint as dcp
 from torch.distributed.checkpoint.stateful import Stateful
@@ -177,10 +177,23 @@ class Trainer:
         b_sz = len(next(iter(self.train_data))[0])
         self.train_data.sampler.set_epoch(epoch)
         print(f"[GPU{self.global_rank}] Starting Epoch {epoch}")
-        for step, (source, targets) in enumerate(self.train_data):
-            source = source.to(self.device)
-            targets = targets.to(self.device)
-            self._run_batch(source, targets, step=step)
+        if epoch == 0:
+            with profiler.profile(
+                activities=[profiler.ProfilerActivity.CPU, profiler.ProfilerActivity.CUDA],
+                profile_memory=True,
+                schedule=profiler.schedule(wait=2, warmup=2, active=5, repeat=2),
+                on_trace_ready=profiler.tensorboard_trace_handler(f'/mnt/dcornelius/tensorboard/{self.job_id}', worker_name=f'worker{self.global_rank}')
+            ) as prof:
+                for step, (source, targets) in enumerate(self.train_data):
+                    prof.step()
+                    source = source.to(self.device)
+                    targets = targets.to(self.device)
+                    self._run_batch(source, targets, step=step)
+        else:
+            for step, (source, targets) in enumerate(self.train_data):
+                source = source.to(self.device)
+                targets = targets.to(self.device)
+                self._run_batch(source, targets, step=step)
 
         print(f"[GPU{self.global_rank}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
 
@@ -345,7 +358,7 @@ def main():
         # snapshot_job_id=,
         # snapshot_epoch=,
     )
-    trainer.train(max_epochs=10)
+    trainer.train(max_epochs=1)
     
     cleanup()
 
