@@ -207,9 +207,7 @@ class Trainer:
         if epoch == 0:
             with profiler.profile(
                 activities=[profiler.ProfilerActivity.CPU, profiler.ProfilerActivity.CUDA],
-                record_shapes=True,
                 profile_memory=True,
-                with_stack=True,
                 schedule=profiler.schedule(wait=2, warmup=2, active=5, repeat=2),
                 on_trace_ready=profiler.tensorboard_trace_handler(f'/mnt/dcornelius/tensorboard/{self.job_id}', worker_name=f'worker{self.global_rank}')
             ) as prof:
@@ -392,7 +390,7 @@ def main():
         # snapshot_job_id=,
         # snapshot_epoch=,
     )
-    trainer.train(max_epochs=10)
+    trainer.train(max_epochs=1)
 
     cleanup()
 
