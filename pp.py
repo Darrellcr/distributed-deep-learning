@@ -202,6 +202,7 @@ class Trainer:
             if self.is_last_stage:
                 targets = targets.to(self.device)
             self._run_batch(source, targets, step=step)
+            if step == 30: break
         print(
             f"[GPU{self.global_rank}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
     

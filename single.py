@@ -154,6 +154,7 @@ class Trainer:
             source = source.to(self.device)
             targets = targets.to(self.device)
             self._run_batch(source, targets, step)
+            if step == 30: break
         print(f"Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
 
     def train(self, max_epochs: int):

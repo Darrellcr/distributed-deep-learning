@@ -154,7 +154,8 @@ class Trainer:
 
         cloned_loss = loss.clone()
         dist.all_reduce(cloned_loss, op=dist.ReduceOp.AVG)
-        self._log_metric("loss", cloned_loss.item(), step)
+        if self.global_rank == 0:
+            self._log_metric("loss", cloned_loss.item(), step)
 
         loss.backward()
         # if self.global_rank == 0:
@@ -168,12 +169,12 @@ class Trainer:
 
     def _run_epoch(self, epoch):
         b_sz = len(next(iter(self.train_data))[0])
-        self.train_data.sampler.set_epoch(epoch)
         print(f"[GPU{self.global_rank}] Starting Epoch {epoch}")
         for step, (source, targets) in enumerate(self.train_data):
             source = source.to(self.device)
             targets = targets.to(self.device)
             self._run_batch(source, targets, step=step)
+            if step == 30: break
 
         print(f"[GPU{self.global_rank}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
 
