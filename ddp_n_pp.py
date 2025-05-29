@@ -191,7 +191,7 @@ class Trainer:
 
         print(f"Epoch {epoch} | Saved snapshot to {save_path}")
 
-    def _run_batch(self, source, targets):
+    def _run_batch(self, source, targets, step):
         self.optimizer.zero_grad()
 
         if self.local_rank == 0:
@@ -200,16 +200,9 @@ class Trainer:
             losses = []
             output = self.schedule.step(target=targets, losses=losses)
 
-            argmax_output = torch.argmax(output, dim=1)
-            if self.training_output is None:
-                self.training_output = torch.clone(argmax_output)
-            else:
-                self.training_output = torch.cat((self.training_output, argmax_output), dim=0)
-            if self.training_targets is None:
-                self.training_targets = torch.clone(targets)
-            else:
-                self.training_targets = torch.cat((self.training_targets, targets), dim=0)
-            self.epoch_losses.append(losses)
+            average_loss = torch.mean(torch.tensor(losses, device=self.device))
+            dist.all_reduce(average_loss, op=dist.ReduceOp.AVG, group=self.device_mesh.get_group('dp'))
+            self._log_metric("loss", average_loss.item(), step)
         else:
             self.schedule.step()
         
@@ -228,10 +221,10 @@ class Trainer:
         self.train_data.sampler.set_epoch(epoch)
         print(f"[GPU{self.global_rank}] Starting Epoch {epoch}")
         print('batch size:', b_sz)
-        for source, targets in self.train_data:
+        for step, (source, targets) in enumerate(self.train_data):
             source = source.to('cuda:0')
             targets = targets.to(f'cuda:{torch.cuda.device_count() - 1}')
-            self._run_batch(source, targets)
+            self._run_batch(source, targets, step)
         print(
             f"[GPU{self.global_rank}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
     
@@ -240,43 +233,43 @@ class Trainer:
             start_time = perf_counter()
             self._run_epoch(epoch)
             end_time = perf_counter()
-            print(f"Epoch {epoch} | Time: {end_time - start_time:.2f}s")
+            # print(f"Epoch {epoch} | Time: {end_time - start_time:.2f}s")
 
-            if self.is_last_stage: 
-                loss = torch.mean(torch.tensor(self.epoch_losses, device=self.device))
-                dist.all_reduce(loss, op=dist.ReduceOp.AVG, group=self.device_mesh.get_group('dp'))
-                print(f"Epoch {epoch} | Loss: {loss.item():.8f}")
+            # if self.is_last_stage: 
+            #     loss = torch.mean(torch.tensor(self.epoch_losses, device=self.device))
+            #     dist.all_reduce(loss, op=dist.ReduceOp.AVG, group=self.device_mesh.get_group('dp'))
+            #     print(f"Epoch {epoch} | Loss: {loss.item():.8f}")
 
-                all_training_output = [torch.zeros_like(self.training_output, device=self.device) 
-                                       for _ in range(self.device_mesh.get_group('dp').size())]
-                all_training_targets = [torch.zeros_like(self.training_targets, device=self.device)
-                                        for _ in range(self.device_mesh.get_group('dp').size())]
-                dist.all_gather(all_training_output, self.training_output, group=self.device_mesh.get_group('dp'))
-                dist.all_gather(all_training_targets, self.training_targets, group=self.device_mesh.get_group('dp'))
-                all_training_output = torch.cat(all_training_output, dim=0)
-                all_training_targets = torch.cat(all_training_targets, dim=0)
-                all_training_output = all_training_output.detach().cpu().numpy()
-                all_training_targets = all_training_targets.detach().cpu().numpy()
-                training_accuracy = accuracy_score(all_training_targets, all_training_output)
-                print(f"Epoch {epoch} | Training Accuracy: {training_accuracy:.4f}")
+            #     all_training_output = [torch.zeros_like(self.training_output, device=self.device) 
+            #                            for _ in range(self.device_mesh.get_group('dp').size())]
+            #     all_training_targets = [torch.zeros_like(self.training_targets, device=self.device)
+            #                             for _ in range(self.device_mesh.get_group('dp').size())]
+            #     dist.all_gather(all_training_output, self.training_output, group=self.device_mesh.get_group('dp'))
+            #     dist.all_gather(all_training_targets, self.training_targets, group=self.device_mesh.get_group('dp'))
+            #     all_training_output = torch.cat(all_training_output, dim=0)
+            #     all_training_targets = torch.cat(all_training_targets, dim=0)
+            #     all_training_output = all_training_output.detach().cpu().numpy()
+            #     all_training_targets = all_training_targets.detach().cpu().numpy()
+            #     training_accuracy = accuracy_score(all_training_targets, all_training_output)
+            #     print(f"Epoch {epoch} | Training Accuracy: {training_accuracy:.4f}")
                 
-                if self.device_mesh.get_group('dp').rank() == 0:
-                    self._log_metric("epoch_time", end_time - start_time, epoch)
-                    self._log_metric("train_accuracy", training_accuracy, epoch)
-                    self._log_metric("loss", loss.item(), epoch)
+            #     if self.device_mesh.get_group('dp').rank() == 0:
+            #         self._log_metric("epoch_time", end_time - start_time, epoch)
+            #         self._log_metric("train_accuracy", training_accuracy, epoch)
+            #         self._log_metric("loss", loss.item(), epoch)
 
-            self.epoch_losses = []
-            self.training_output = None
-            self.training_targets = None
+            # self.epoch_losses = []
+            # self.training_output = None
+            # self.training_targets = None
 
-            self.stage_mod.eval()
-            save_model = torch.tensor(self._evaluate(epoch), device=self.device)
-            self.stage_mod.train()
-            dist.broadcast(save_model, src=self.device_mesh.mesh[0][-1])
+            # self.stage_mod.eval()
+            # save_model = torch.tensor(self._evaluate(epoch), device=self.device)
+            # self.stage_mod.train()
+            # dist.broadcast(save_model, src=self.device_mesh.mesh[0][-1])
 
-            if save_model:
-                print(f"Epoch {epoch} | Saving snapshot")
-                self._save_snapshot(epoch)
+            # if save_model:
+            #     print(f"Epoch {epoch} | Saving snapshot")
+            #     self._save_snapshot(epoch)
 
     @torch.no_grad()
     def _evaluate(self, epoch):

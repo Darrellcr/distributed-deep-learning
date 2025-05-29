@@ -133,22 +133,12 @@ class Trainer:
         dcp.save(state_dict, checkpoint_id=save_path)
         print(f"Epoch {epoch} | Saved snapshot to {save_path}")
 
-    def _run_batch(self, source, targets):
+    def _run_batch(self, source, targets, step):
         self.optimizer.zero_grad()
         output = self.model(source)
         loss = F.cross_entropy(output, targets)
 
-        argmax_output = torch.argmax(output, dim=1)
-        if self.training_output is None:
-            self.training_output = torch.clone(argmax_output)
-        else:
-            self.training_output = torch.cat((self.training_output, argmax_output), dim=0)
-        if self.training_targets is None:
-            self.training_targets = torch.clone(targets)
-        else:
-            self.training_targets = torch.cat((self.training_targets, targets), dim=0)
-        
-        self.epoch_losses.append(loss)
+        self._log_metric("loss", loss.item(), step)
 
         loss.backward()
         self.optimizer.step()
@@ -160,10 +150,10 @@ class Trainer:
     def _run_epoch(self, epoch):
         b_sz = len(next(iter(self.train_data))[0])
         print(f"Starting Epoch {epoch}")
-        for source, targets in self.train_data:
+        for step, (source, targets) in enumerate(self.train_data):
             source = source.to(self.device)
             targets = targets.to(self.device)
-            self._run_batch(source, targets)
+            self._run_batch(source, targets, step)
         print(f"Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
 
     def train(self, max_epochs: int):
@@ -173,28 +163,28 @@ class Trainer:
             end_time = perf_counter()
             print(f"Epoch {epoch} | Time: {end_time - start_time:.2f}s")
 
-            loss = torch.mean(torch.tensor(self.epoch_losses, device=self.device))
-            print(f"Epoch {epoch} | Loss: {loss.item()}")
-            self.epoch_losses = []
+            # loss = torch.mean(torch.tensor(self.epoch_losses, device=self.device))
+            # print(f"Epoch {epoch} | Loss: {loss.item()}")
+            # self.epoch_losses = []
 
-            training_output = self.training_output.detach().cpu().numpy()
-            training_targets = self.training_targets.detach().cpu().numpy()
-            training_accuracy = accuracy_score(training_targets, training_output)
-            print(f"Epoch {epoch} | Training Accuracy: {training_accuracy}")
-            self.training_output = None
-            self.training_targets = None
+            # training_output = self.training_output.detach().cpu().numpy()
+            # training_targets = self.training_targets.detach().cpu().numpy()
+            # training_accuracy = accuracy_score(training_targets, training_output)
+            # print(f"Epoch {epoch} | Training Accuracy: {training_accuracy}")
+            # self.training_output = None
+            # self.training_targets = None
 
-            self._log_metric("train_accuracy", training_accuracy, epoch)
-            self._log_metric("epoch_time", end_time - start_time, epoch)
-            self._log_metric("loss", loss.item(), epoch)
+            # self._log_metric("train_accuracy", training_accuracy, epoch)
+            # self._log_metric("epoch_time", end_time - start_time, epoch)
+            # self._log_metric("loss", loss.item(), epoch)
             
-            self.model.eval()
-            save_model = torch.tensor(self._evaluate(epoch), device=self.device)
-            self.model.train()
+            # self.model.eval()
+            # save_model = torch.tensor(self._evaluate(epoch), device=self.device)
+            # self.model.train()
 
-            if save_model:
-                print(f"Saving snapshot at epoch {epoch}")
-                self._save_snapshot(epoch)
+            # if save_model:
+            #     print(f"Saving snapshot at epoch {epoch}")
+            #     self._save_snapshot(epoch)
 
     @torch.no_grad()
     def _evaluate(self, epoch):
@@ -243,7 +233,7 @@ class Trainer:
         return False
 
     def _log_metric(self, metric, value, epoch):
-        with open(f"/mnt/dcornelius/training_logs/{metric}.csv", "a") as f:
+        with open(f"/mnt/dcornelius/training_logs/perstep/{metric}.csv", "a") as f:
             writer = csv.writer(f)
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             model_start_job_id = self.snapshot_job_id if self.snapshot_job_id else self.job_id
@@ -287,7 +277,7 @@ def main():
         # snapshot_job_id=,
         # snapshot_epoch=,
     )
-    trainer.train(max_epochs=20)
+    trainer.train(max_epochs=1)
 
 
 if __name__ == "__main__":

@@ -152,16 +152,9 @@ class Trainer:
         output = self.model(source)
         loss = F.cross_entropy(output, targets)
 
-        argmax_output = torch.argmax(output, dim=1)
-        if self.training_output is None:
-            self.training_output = torch.clone(argmax_output)
-        else:
-            self.training_output = torch.cat((self.training_output, argmax_output), dim=0)
-        if self.training_targets is None:
-            self.training_targets = torch.clone(targets)
-        else:
-            self.training_targets = torch.cat((self.training_targets, targets), dim=0)
-        self.epoch_losses.append(loss)
+        cloned_loss = loss.clone()
+        dist.all_reduce(cloned_loss, op=dist.ReduceOp.AVG)
+        self._log_metric("loss", cloned_loss.item(), step)
 
         loss.backward()
         # if self.global_rank == 0:
@@ -177,23 +170,10 @@ class Trainer:
         b_sz = len(next(iter(self.train_data))[0])
         self.train_data.sampler.set_epoch(epoch)
         print(f"[GPU{self.global_rank}] Starting Epoch {epoch}")
-        if epoch == 0:
-            with profiler.profile(
-                activities=[profiler.ProfilerActivity.CPU, profiler.ProfilerActivity.CUDA],
-                profile_memory=True,
-                schedule=profiler.schedule(wait=2, warmup=2, active=5, repeat=2),
-                on_trace_ready=profiler.tensorboard_trace_handler(f'/mnt/dcornelius/tensorboard/{self.job_id}', worker_name=f'worker{self.global_rank}')
-            ) as prof:
-                for step, (source, targets) in enumerate(self.train_data):
-                    prof.step()
-                    source = source.to(self.device)
-                    targets = targets.to(self.device)
-                    self._run_batch(source, targets, step=step)
-        else:
-            for step, (source, targets) in enumerate(self.train_data):
-                source = source.to(self.device)
-                targets = targets.to(self.device)
-                self._run_batch(source, targets, step=step)
+        for step, (source, targets) in enumerate(self.train_data):
+            source = source.to(self.device)
+            targets = targets.to(self.device)
+            self._run_batch(source, targets, step=step)
 
         print(f"[GPU{self.global_rank}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
 
@@ -202,42 +182,42 @@ class Trainer:
             start_time = perf_counter()
             self._run_epoch(epoch)
             end_time = perf_counter()
-            print(f"Epoch {epoch} | Time: {end_time - start_time:.2f}s")
+            # print(f"Epoch {epoch} | Time: {end_time - start_time:.2f}s")
 
-            all_training_output = [torch.zeros_like(self.training_output, device=self.device) for _ in range(dist.get_world_size())]
-            all_training_targets = [torch.zeros_like(self.training_targets, device=self.device) for _ in range(dist.get_world_size())]
-            dist.all_gather(tensor_list=all_training_output, tensor=self.training_output)
-            dist.all_gather(tensor_list=all_training_targets, tensor=self.training_targets)
-            all_training_output = torch.cat(all_training_output, dim=0)
-            all_training_targets = torch.cat(all_training_targets, dim=0)
+            # all_training_output = [torch.zeros_like(self.training_output, device=self.device) for _ in range(dist.get_world_size())]
+            # all_training_targets = [torch.zeros_like(self.training_targets, device=self.device) for _ in range(dist.get_world_size())]
+            # dist.all_gather(tensor_list=all_training_output, tensor=self.training_output)
+            # dist.all_gather(tensor_list=all_training_targets, tensor=self.training_targets)
+            # all_training_output = torch.cat(all_training_output, dim=0)
+            # all_training_targets = torch.cat(all_training_targets, dim=0)
 
-            all_training_output = all_training_output.detach().cpu().numpy()
-            all_training_targets = all_training_targets.detach().cpu().numpy()
-            train_accuracy = accuracy_score(all_training_targets, all_training_output)
-            self.training_output = None
-            self.training_targets = None
+            # all_training_output = all_training_output.detach().cpu().numpy()
+            # all_training_targets = all_training_targets.detach().cpu().numpy()
+            # train_accuracy = accuracy_score(all_training_targets, all_training_output)
+            # self.training_output = None
+            # self.training_targets = None
 
-            if self.global_rank == 0:
-                self._log_metric("train_accuracy", train_accuracy, epoch)
-                print(f"Epoch {epoch} | Training Accuracy: {train_accuracy}")
+            # if self.global_rank == 0:
+            #     self._log_metric("train_accuracy", train_accuracy, epoch)
+            #     print(f"Epoch {epoch} | Training Accuracy: {train_accuracy}")
 
-            loss = torch.mean(torch.tensor(self.epoch_losses, device=self.device))
-            dist.all_reduce(loss, op=dist.ReduceOp.AVG)
-            print(f"Epoch {epoch} | Loss: {loss.item()}")
-            self.epoch_losses = []
+            # loss = torch.mean(torch.tensor(self.epoch_losses, device=self.device))
+            # dist.all_reduce(loss, op=dist.ReduceOp.AVG)
+            # print(f"Epoch {epoch} | Loss: {loss.item()}")
+            # self.epoch_losses = []
 
-            if self.global_rank == 0:
-                self._log_metric("epoch_time", end_time - start_time, epoch)
-                self._log_metric("loss", loss.item(), epoch)
+            # if self.global_rank == 0:
+            #     self._log_metric("epoch_time", end_time - start_time, epoch)
+            #     self._log_metric("loss", loss.item(), epoch)
             
-            self.model.eval()
-            save_model = torch.tensor(self._evaluate(epoch), device=self.device)
-            self.model.train()
-            dist.broadcast(save_model, src=0)
+            # self.model.eval()
+            # save_model = torch.tensor(self._evaluate(epoch), device=self.device)
+            # self.model.train()
+            # dist.broadcast(save_model, src=0)
 
-            if save_model:
-                print(f"Saving snapshot at epoch {epoch}")
-                self._save_snapshot(epoch)
+            # if save_model:
+            #     print(f"Saving snapshot at epoch {epoch}")
+            #     self._save_snapshot(epoch)
 
     @torch.no_grad()
     def _evaluate(self, epoch):
