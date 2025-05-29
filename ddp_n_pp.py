@@ -327,7 +327,7 @@ class Trainer:
         return False
 
     def _log_metric(self, metric, value, epoch):
-        with open(f"/mnt/dcornelius/training_logs/{metric}.csv", "a") as f:
+        with open(f"/mnt/dcornelius/training_logs/perstep/{metric}.csv", "a") as f:
             writer = csv.writer(f)
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             model_start_job_id = self.snapshot_job_id if self.snapshot_job_id else self.job_id
@@ -352,7 +352,7 @@ def main():
         train_dataset, 
         num_replicas=device_mesh.get_group('dp').size(), 
         rank=device_mesh.get_group('dp').rank(),
-        drop_last=True, shuffle=True, seed=seed)
+        drop_last=True)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler, drop_last=True, shuffle=False, num_workers=2)
 
     test_dataset = AptosDataset(

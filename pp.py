@@ -17,7 +17,7 @@ from torch.distributed.checkpoint.stateful import Stateful
 from torch.distributed.checkpoint.state_dict import get_state_dict, set_state_dict
 from torch.distributed.pipelining import ScheduleGPipe, pipeline, SplitPoint, build_stage, Pipe
 from torch.nn import functional as F
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, SequentialSampler
 from torchvision import models, io
 
 
@@ -286,7 +286,7 @@ class Trainer:
         return False
 
     def _log_metric(self, metric, value, epoch):
-        with open(f"/mnt/dcornelius/training_logs/{metric}.csv", "a") as f:
+        with open(f"/mnt/dcornelius/training_logs/perstep/{metric}.csv", "a") as f:
             writer = csv.writer(f)
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             model_start_job_id = self.snapshot_job_id if self.snapshot_job_id else self.job_id
@@ -336,8 +336,9 @@ def main():
     g = torch.Generator()
     g.manual_seed(seed)
     batch_size = 30
+    sampler = SequentialSampler(train_dataset)
     train_loader = DataLoader(
-        train_dataset, batch_size=batch_size, drop_last=True, shuffle=True, generator=g, num_workers=2
+        train_dataset, batch_size=batch_size, drop_last=True, sampler=sampler, num_workers=2
     )
     test_loader = DataLoader(
         test_dataset, batch_size=batch_size, drop_last=True, shuffle=True, num_workers=2

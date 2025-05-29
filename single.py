@@ -17,7 +17,7 @@ from torch.distributed.checkpoint.stateful import Stateful
 from torch.distributed.checkpoint.state_dict import get_state_dict, set_state_dict
 from torch.nn import functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.utils.data import Dataset, DataLoader, DistributedSampler
+from torch.utils.data import Dataset, DataLoader, DistributedSampler, SequentialSampler
 from torchvision import models, io
 from tqdm import tqdm
 
@@ -252,9 +252,8 @@ def main():
         label_col="diagnosis",
         transform=Normalize(),
     )
-    g = torch.Generator()
-    g.manual_seed(seed)
-    train_loader = DataLoader(train_dataset, batch_size=30, shuffle=True, generator=g, num_workers=2)
+    sampler = SequentialSampler(train_dataset)
+    train_loader = DataLoader(train_dataset, batch_size=30, num_workers=2, sampler=sampler)
 
     test_dataset = AptosDataset(
         csv_file=(dataset_dir / "test.csv"),
