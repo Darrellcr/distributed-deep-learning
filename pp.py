@@ -339,7 +339,7 @@ def main():
     batch_size = 30
     sampler = SequentialSampler(train_dataset)
     train_loader = DataLoader(
-        train_dataset, batch_size=batch_size, drop_last=True, sampler=sampler, num_workers=2
+        train_dataset, batch_size=batch_size, drop_last=True, sampler=sampler
     )
     test_loader = DataLoader(
         test_dataset, batch_size=batch_size, drop_last=True, shuffle=True, num_workers=2

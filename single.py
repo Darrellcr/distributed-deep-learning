@@ -254,7 +254,7 @@ def main():
         transform=Normalize(),
     )
     sampler = SequentialSampler(train_dataset)
-    train_loader = DataLoader(train_dataset, batch_size=30, num_workers=2, sampler=sampler)
+    train_loader = DataLoader(train_dataset, batch_size=30, sampler=sampler)
 
     test_dataset = AptosDataset(
         csv_file=(dataset_dir / "test.csv"),

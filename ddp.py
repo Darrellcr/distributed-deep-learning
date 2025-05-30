@@ -315,7 +315,7 @@ def main():
         transform=Normalize(),
     )
     train_sampler = DistributedSampler(train_dataset, drop_last=True)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler, shuffle=False, num_workers=2)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler, shuffle=False)
 
     test_dataset = AptosDataset(
         csv_file=(dataset_dir / "test.csv"),
