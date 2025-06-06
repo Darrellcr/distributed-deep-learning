@@ -17,7 +17,7 @@ from torch.distributed.checkpoint.stateful import Stateful
 from torch.distributed.checkpoint.state_dict import get_state_dict, set_state_dict
 from torch.nn import functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.utils.data import Dataset, DataLoader, DistributedSampler
+from torch.utils.data import Dataset, DataLoader, SequentialSampler
 from torchvision import models, io
 from tqdm import tqdm
 
@@ -192,9 +192,9 @@ class Trainer:
             save_model = torch.tensor(self._evaluate(epoch), device=self.device)
             self.model.train()
 
-            if save_model:
-                print(f"Saving snapshot at epoch {epoch}")
-                self._save_snapshot(epoch)
+            # if save_model:
+            #     print(f"Saving snapshot at epoch {epoch}")
+            #     self._save_snapshot(epoch)
 
     @torch.no_grad()
     def _evaluate(self, epoch):
@@ -262,9 +262,8 @@ def main():
         label_col="diagnosis",
         transform=Normalize(),
     )
-    g = torch.Generator()
-    g.manual_seed(seed)
-    train_loader = DataLoader(train_dataset, batch_size=30, shuffle=True, generator=g, num_workers=2)
+    sampler = SequentialSampler(train_dataset)
+    train_loader = DataLoader(train_dataset, batch_size=30, sampler=sampler)
 
     test_dataset = AptosDataset(
         csv_file=(dataset_dir / "test.csv"),
@@ -273,7 +272,8 @@ def main():
         label_col="diagnosis",
         transform=Normalize(),
     )
-    test_loader = DataLoader(test_dataset, batch_size=30, shuffle=False, num_workers=2)
+    sampler = SequentialSampler(test_dataset)
+    test_loader = DataLoader(test_dataset, batch_size=30, sampler=sampler)
     
     model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
     in_features = model.classifier.in_features
@@ -287,7 +287,7 @@ def main():
         # snapshot_job_id=,
         # snapshot_epoch=,
     )
-    trainer.train(max_epochs=20)
+    trainer.train(max_epochs=10)
 
 
 if __name__ == "__main__":

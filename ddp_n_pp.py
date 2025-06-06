@@ -19,7 +19,7 @@ from torch.distributed.device_mesh import init_device_mesh, DeviceMesh
 from torch.distributed.pipelining import SplitPoint, ScheduleGPipe, pipeline, build_stage, Pipe
 from torch.nn import functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.utils.data import Dataset, DataLoader, DistributedSampler
+from torch.utils.data import Dataset, DataLoader, DistributedSampler, SequentialSampler
 from torchvision import models, io
 from tqdm import tqdm
 
@@ -274,9 +274,9 @@ class Trainer:
             self.stage_mod.train()
             dist.broadcast(save_model, src=self.device_mesh.mesh[0][-1])
 
-            if save_model:
-                print(f"Epoch {epoch} | Saving snapshot")
-                self._save_snapshot(epoch)
+            # if save_model:
+            #     print(f"Epoch {epoch} | Saving snapshot")
+            #     self._save_snapshot(epoch)
 
     @torch.no_grad()
     def _evaluate(self, epoch):
@@ -355,12 +355,8 @@ def main():
         label_col="diagnosis",
         transform=Normalize(),
     )
-    train_sampler = DistributedSampler(
-        train_dataset, 
-        num_replicas=device_mesh.get_group('dp').size(), 
-        rank=device_mesh.get_group('dp').rank(),
-        drop_last=True, shuffle=True, seed=seed)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler, drop_last=True, shuffle=False, num_workers=2)
+    train_sampler = SequentialSampler(train_dataset)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler, drop_last=True)
 
     test_dataset = AptosDataset(
         csv_file=(dataset_dir / "test.csv"),
@@ -374,7 +370,7 @@ def main():
         num_replicas=device_mesh.get_group('dp').size(), 
         rank=device_mesh.get_group('dp').rank(),
         drop_last=True, shuffle=False, seed=seed)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, sampler=test_sampler, drop_last=True, shuffle=False, num_workers=2)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, sampler=test_sampler, drop_last=True)
 
     model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
     features_in = model.classifier.in_features

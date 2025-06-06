@@ -17,7 +17,7 @@ from torch.distributed.checkpoint.stateful import Stateful
 from torch.distributed.checkpoint.state_dict import get_state_dict, set_state_dict
 from torch.nn import functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.utils.data import Dataset, DataLoader, DistributedSampler
+from torch.utils.data import Dataset, DataLoader, DistributedSampler, SequentialSampler
 from torchvision import models, io
 from tqdm import tqdm
 
@@ -222,9 +222,9 @@ class Trainer:
             self.model.train()
             dist.broadcast(save_model, src=0)
 
-            if save_model:
-                print(f"Saving snapshot at epoch {epoch}")
-                self._save_snapshot(epoch)
+            # if save_model:
+            #     print(f"Saving snapshot at epoch {epoch}")
+            #     self._save_snapshot(epoch)
 
     @torch.no_grad()
     def _evaluate(self, epoch):
@@ -320,8 +320,8 @@ def main():
         label_col="diagnosis",
         transform=Normalize(),
     )
-    train_sampler = DistributedSampler(train_dataset, shuffle=True, drop_last=True, seed=seed)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler, shuffle=False, num_workers=2)
+    train_sampler = SequentialSampler(train_dataset)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler, shuffle=False)
 
     test_dataset = AptosDataset(
         csv_file=(dataset_dir / "test.csv"),
@@ -331,7 +331,7 @@ def main():
         transform=Normalize(),
     )
     test_sampler = DistributedSampler(test_dataset, shuffle=False, drop_last=True, seed=seed)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, sampler=test_sampler, shuffle=False, num_workers=2)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, sampler=test_sampler, shuffle=False)
     
     model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
     in_features = model.classifier.in_features
