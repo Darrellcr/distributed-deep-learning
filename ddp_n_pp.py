@@ -202,7 +202,8 @@ class Trainer:
 
             average_loss = torch.mean(torch.tensor(losses, device=self.device))
             dist.all_reduce(average_loss, op=dist.ReduceOp.AVG, group=self.device_mesh.get_group('dp'))
-            self._log_metric("loss", average_loss.item(), step)
+            if self.device_mesh.get_group('dp').rank() == 0:
+               self._log_metric("loss", average_loss.item(), step)
         else:
             self.schedule.step()
         
@@ -225,6 +226,7 @@ class Trainer:
             source = source.to('cuda:0')
             targets = targets.to(f'cuda:{torch.cuda.device_count() - 1}')
             self._run_batch(source, targets, step)
+            if step == 30: break
         print(
             f"[GPU{self.global_rank}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
     
