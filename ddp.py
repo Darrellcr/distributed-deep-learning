@@ -314,7 +314,7 @@ def main():
         label_col="diagnosis",
         transform=Normalize(),
     )
-    train_sampler = SequentialSampler(train_dataset, drop_last=True)
+    train_sampler = SequentialSampler(train_dataset)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler)
 
     test_dataset = AptosDataset(
@@ -324,7 +324,7 @@ def main():
         label_col="diagnosis",
         transform=Normalize(),
     )
-    test_sampler = SequentialSampler(test_dataset, shuffle=False, drop_last=True, seed=seed)
+    test_sampler = SequentialSampler(test_dataset)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, sampler=test_sampler, shuffle=False, num_workers=2)
     
     model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)

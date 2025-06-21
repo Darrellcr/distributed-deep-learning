@@ -349,7 +349,7 @@ def main():
         transform=Normalize(),
     )
     train_sampler = SequentialSampler(
-        train_dataset, 
+        train_dataset
     )
     train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler)
 
