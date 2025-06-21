@@ -334,8 +334,6 @@ def main():
         transform=Normalize(),
     )
     
-    g = torch.Generator()
-    g.manual_seed(seed)
     batch_size = 30
     sampler = SequentialSampler(train_dataset)
     train_loader = DataLoader(

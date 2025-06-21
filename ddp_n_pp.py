@@ -19,7 +19,7 @@ from torch.distributed.device_mesh import init_device_mesh, DeviceMesh
 from torch.distributed.pipelining import SplitPoint, ScheduleGPipe, pipeline, build_stage, Pipe
 from torch.nn import functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.utils.data import Dataset, DataLoader, DistributedSampler
+from torch.utils.data import Dataset, DataLoader, DistributedSampler, SequentialSampler
 from torchvision import models, io
 from tqdm import tqdm
 
@@ -340,7 +340,7 @@ def main():
     set_seed(seed)
     dataset_dir = Path("/mnt/dcornelius/preprocessed-aptos")
 
-    batch_size = 10
+    batch_size = 30
     train_dataset = AptosDataset(
         csv_file=(dataset_dir / "train.csv"),
         root_dir=(dataset_dir / "train_images"),
@@ -348,12 +348,10 @@ def main():
         label_col="diagnosis",
         transform=Normalize(),
     )
-    train_sampler = DistributedSampler(
+    train_sampler = SequentialSampler(
         train_dataset, 
-        num_replicas=device_mesh.get_group('dp').size(), 
-        rank=device_mesh.get_group('dp').rank(),
-        drop_last=True)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler, drop_last=True, shuffle=False, num_workers=2)
+    )
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler)
 
     test_dataset = AptosDataset(
         csv_file=(dataset_dir / "test.csv"),
@@ -362,18 +360,16 @@ def main():
         label_col="diagnosis",
         transform=Normalize(),
     )
-    test_sampler = DistributedSampler(
-        test_dataset, 
-        num_replicas=device_mesh.get_group('dp').size(), 
-        rank=device_mesh.get_group('dp').rank(),
-        drop_last=True, shuffle=False, seed=seed)
+    test_sampler = SequentialSampler(
+        test_dataset
+    )
     test_loader = DataLoader(test_dataset, batch_size=batch_size, sampler=test_sampler, drop_last=True, shuffle=False, num_workers=2)
 
     model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
     features_in = model.classifier.in_features
     model.classifier = nn.Linear(features_in, 5)
 
-    num_microbatches = 5
+    num_microbatches = 1
     input_sample = next(iter(train_loader))[0][:batch_size//num_microbatches]
     pipe = pipeline(
         model,

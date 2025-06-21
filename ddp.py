@@ -17,7 +17,7 @@ from torch.distributed.checkpoint.stateful import Stateful
 from torch.distributed.checkpoint.state_dict import get_state_dict, set_state_dict
 from torch.nn import functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.utils.data import Dataset, DataLoader, DistributedSampler
+from torch.utils.data import Dataset, DataLoader, DistributedSampler, SequentialSampler
 from torchvision import models, io
 from tqdm import tqdm
 
@@ -306,7 +306,7 @@ def main():
     set_seed(seed)
 
     dataset_dir = Path("/mnt/dcornelius/preprocessed-aptos")
-    batch_size = 15
+    batch_size = 30
     train_dataset = AptosDataset(
         csv_file=(dataset_dir / "train.csv"),
         root_dir=(dataset_dir / "train_images"),
@@ -314,8 +314,8 @@ def main():
         label_col="diagnosis",
         transform=Normalize(),
     )
-    train_sampler = DistributedSampler(train_dataset, drop_last=True)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler, shuffle=False)
+    train_sampler = SequentialSampler(train_dataset, drop_last=True)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler)
 
     test_dataset = AptosDataset(
         csv_file=(dataset_dir / "test.csv"),
@@ -324,7 +324,7 @@ def main():
         label_col="diagnosis",
         transform=Normalize(),
     )
-    test_sampler = DistributedSampler(test_dataset, shuffle=False, drop_last=True, seed=seed)
+    test_sampler = SequentialSampler(test_dataset, shuffle=False, drop_last=True, seed=seed)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, sampler=test_sampler, shuffle=False, num_workers=2)
     
     model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
