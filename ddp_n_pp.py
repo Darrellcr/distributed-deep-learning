@@ -223,8 +223,10 @@ class Trainer:
         print(f"[GPU{self.global_rank}] Starting Epoch {epoch}")
         print('batch size:', b_sz)
         for step, (source, targets) in enumerate(self.train_data):
-            source = source.to('cuda:0')
-            targets = targets.to(f'cuda:{torch.cuda.device_count() - 1}')
+            if self.local_rank == 0:
+                source = source.to(self.device)
+            if self.is_last_stage:
+                targets = targets.to(self.device)
             self._run_batch(source, targets, step)
             if step == 30: break
         print(
