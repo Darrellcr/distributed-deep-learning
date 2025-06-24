@@ -1,0 +1,8 @@
+[cli:run]
+component=dist.ddp
+scheduler=kubernetes
+workspace=
+
+[kubernetes]
+queue=torchx
+namespace=torchx-worker
