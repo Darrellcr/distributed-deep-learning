@@ -40,7 +40,7 @@ def python(
     c: Optional[str] = None,                                                                                               
     script: Optional[str] = None,                                                                                          
     image: str = torchx.IMAGE,                                                                                             
-    name: str = "torchx_utils_python",                                                                                     
+    name: str = "single",                                                                                     
     cpu: int = 1,                                                                                                          
     gpu: int = 0,                                                                                                          
     memMB: int = 1024,                                                                                                     
