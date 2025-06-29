@@ -251,10 +251,10 @@ class Trainer:
 
 
 def main():
-    seed = 42
-    set_seed(seed)
+    # seed = 42
+    # set_seed(seed)
 
-    dataset_dir = Path("/mnt/dcornelius/preprocessed-aptos")
+    dataset_dir = Path("/mnt/dcornelius/preprocessed-aptos-224")
     train_dataset = AptosDataset(
         csv_file=(dataset_dir / "train.csv"),
         root_dir=(dataset_dir / "train_images"),
@@ -262,9 +262,9 @@ def main():
         label_col="diagnosis",
         transform=Normalize(),
     )
-    g = torch.Generator()
-    g.manual_seed(seed)
-    train_loader = DataLoader(train_dataset, batch_size=30, shuffle=True, generator=g, num_workers=2)
+    # g = torch.Generator()
+    # g.manual_seed(seed)
+    train_loader = DataLoader(train_dataset, batch_size=30, shuffle=True, num_workers=2)
 
     test_dataset = AptosDataset(
         csv_file=(dataset_dir / "test.csv"),
@@ -273,7 +273,7 @@ def main():
         label_col="diagnosis",
         transform=Normalize(),
     )
-    test_loader = DataLoader(test_dataset, batch_size=30, shuffle=False, num_workers=2)
+    test_loader = DataLoader(test_dataset, batch_size=30, shuffle=True, num_workers=2)
     
     model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
     in_features = model.classifier.in_features
@@ -287,7 +287,7 @@ def main():
         # snapshot_job_id=,
         # snapshot_epoch=,
     )
-    trainer.train(max_epochs=20)
+    trainer.train(max_epochs=30)
 
 
 if __name__ == "__main__":
