@@ -225,20 +225,29 @@ class Trainer:
 
         accuracy = accuracy_score(local_targets, local_output)
         macro_f1 = f1_score(local_targets, local_output, average="macro")
+        weighted_f1 = f1_score(local_targets, local_output, average="weighted")
         macro_precision = precision_score(local_targets, local_output, average="macro")
+        weighted_precision = precision_score(local_targets, local_output, average="weighted")
         macro_recall = recall_score(local_targets, local_output, average="macro")
+        weighted_recall = recall_score(local_targets, local_output, average="weighted")
         qwk = cohen_kappa_score(local_targets, local_output, weights="quadratic")
 
         print(f"Epoch {epoch} | Validation Accuracy: {accuracy}")
         print(f"Epoch {epoch} | Validation Macro F1: {macro_f1}")
+        print(f"Epoch {epoch} | Validation Weighted F1: {weighted_f1}")
         print(f"Epoch {epoch} | Validation Macro Precision: {macro_precision}")
+        print(f"Epoch {epoch} | Validation Weighted Precision: {weighted_precision}")
         print(f"Epoch {epoch} | Validation Macro Recall: {macro_recall}")
+        print(f"Epoch {epoch} | Validation Weighted Recall: {weighted_recall}")
         print(f"Epoch {epoch} | Validation QWK: {qwk}")
 
         self._log_metric("val_accuracy", accuracy, epoch)
         self._log_metric("macro_f1", macro_f1, epoch)
+        self._log_metric("weighted_f1", weighted_f1, epoch)
         self._log_metric("macro_precision", macro_precision, epoch)
+        self._log_metric("weighted_precision", weighted_precision, epoch)
         self._log_metric("macro_recall", macro_recall, epoch)
+        self._log_metric("weighted_recall", weighted_recall, epoch)
         self._log_metric("qwk", qwk, epoch)
 
         # if qwk > self.best_qwk:
