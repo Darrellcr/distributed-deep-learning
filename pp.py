@@ -8,7 +8,7 @@ from typing import Union, Iterable
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import cohen_kappa_score, f1_score, accuracy_score
+from sklearn.metrics import cohen_kappa_score, f1_score, accuracy_score, precision_score, recall_score
 import torch
 from torch import optim, nn
 import torch.distributed as dist
@@ -238,14 +238,13 @@ class Trainer:
                 self._log_metric("loss", loss.item(), epoch)
 
             self.stage_mod.eval()
-            self.schedule
             save_model = torch.tensor(self._evaluate(epoch), device=self.device)
             self.stage_mod.train()
             dist.broadcast(save_model, src=self.pipe.num_stages - 1)
 
-            if save_model:
-                print(f"Saving model at epoch {epoch}")
-                self._save_snapshot(epoch)
+            # if save_model:
+            #     print(f"Saving model at epoch {epoch}")
+            #     self._save_snapshot(epoch)
 
     @torch.no_grad()
     def _evaluate(self, epoch: int):
@@ -278,13 +277,29 @@ class Trainer:
             
             qwk = cohen_kappa_score(merged_targets, merged_output, weights='quadratic')
             weighted_f1 = f1_score(merged_targets, merged_output, average='weighted')
+            macro_f1 = f1_score(merged_targets, merged_output, average='macro')
+            weighted_precision = precision_score(merged_targets, merged_output, average='weighted')
+            macro_precision = precision_score(merged_targets, merged_output, average='macro')
+            weighted_recall = recall_score(merged_targets, merged_output, average='weighted')
+            macro_recall = recall_score(merged_targets, merged_output, average='macro')
             accuracy = accuracy_score(merged_targets, merged_output)
+
             print(f"Epoch {epoch} | Validation Accuracy: {accuracy}")
             print(f"Epoch {epoch} | Validation Weighted F1: {weighted_f1}")
+            print(f"Epoch {epoch} | Validation Macro F1: {macro_f1}")
+            print(f"Epoch {epoch} | Validation Weighted Precision: {weighted_precision}")
+            print(f"Epoch {epoch} | Validation Macro Precision: {macro_precision}")
+            print(f"Epoch {epoch} | Validation Weighted Recall: {weighted_recall}")
+            print(f"Epoch {epoch} | Validation Macro Recall: {macro_recall}")
             print(f"Epoch {epoch} | Validation QWK: {qwk}")
 
             self._log_metric("val_accuracy", accuracy, epoch)
             self._log_metric("weighted_f1", weighted_f1, epoch)
+            self._log_metric("macro_f1", macro_f1, epoch)
+            self._log_metric("weighted_precision", weighted_precision, epoch)
+            self._log_metric("macro_precision", macro_precision, epoch)
+            self._log_metric("weighted_recall", weighted_recall, epoch)
+            self._log_metric("macro_recall", macro_recall, epoch)
             self._log_metric("qwk", qwk, epoch)
             if qwk > self.best_qwk:
                 self.best_qwk = qwk
@@ -294,7 +309,11 @@ class Trainer:
         return False
 
     def _log_metric(self, metric, value, epoch):
-        with open(f"/mnt/dcornelius/training_logs/{metric}.csv", "a") as f:
+        log_dir = Path(f"/mnt/dcornelius/training_logs/by_job_id/{self.job_id}")
+        os.makedirs(log_dir, exist_ok=True)
+        file_path = log_dir / f"{metric}.csv"
+
+        with open(file_path, "a") as f:
             writer = csv.writer(f)
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             model_start_job_id = self.snapshot_job_id if self.snapshot_job_id else self.job_id
@@ -322,8 +341,8 @@ class Trainer:
 
 def main():
     setup()
-    seed = 42
-    set_seed(seed)
+    # seed = 42
+    # set_seed(seed)
 
     dataset_dir = Path("/mnt/dcornelius/preprocessed-aptos")
     train_dataset = AptosDataset(
@@ -341,11 +360,11 @@ def main():
         transform=Normalize(),
     )
     
-    g = torch.Generator()
-    g.manual_seed(seed)
+    # g = torch.Generator()
+    # g.manual_seed(seed)
     batch_size = 30
     train_loader = DataLoader(
-        train_dataset, batch_size=batch_size, drop_last=True, shuffle=True, generator=g, num_workers=2
+        train_dataset, batch_size=batch_size, drop_last=True, shuffle=True, num_workers=2
     )
     test_loader = DataLoader(
         test_dataset, batch_size=batch_size, drop_last=True, shuffle=True, num_workers=2
