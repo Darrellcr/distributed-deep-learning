@@ -344,7 +344,7 @@ def main():
     # seed = 42
     # set_seed(seed)
 
-    dataset_dir = Path("/mnt/dcornelius/preprocessed-aptos")
+    dataset_dir = Path("/mnt/dcornelius/preprocessed-aptos-224")
     train_dataset = AptosDataset(
         csv_file=(dataset_dir / "train.csv"),
         root_dir=(dataset_dir / "train_images"),
