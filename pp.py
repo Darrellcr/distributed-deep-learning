@@ -360,11 +360,11 @@ def main():
         transform=Normalize(),
     )
     
-    # g = torch.Generator()
+    g = torch.Generator()
     # g.manual_seed(seed)
     batch_size = 30
     train_loader = DataLoader(
-        train_dataset, batch_size=batch_size, drop_last=True, shuffle=True, num_workers=2
+        train_dataset, batch_size=batch_size, drop_last=True, shuffle=True, generator=g, num_workers=2
     )
     test_loader = DataLoader(
         test_dataset, batch_size=batch_size, drop_last=True, shuffle=True, num_workers=2
