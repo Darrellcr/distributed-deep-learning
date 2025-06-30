@@ -331,7 +331,7 @@ def main():
     # seed = 42
     # set_seed(seed)
 
-    dataset_dir = Path("/mnt/dcornelius/preprocessed-aptos")
+    dataset_dir = Path("/mnt/dcornelius/preprocessed-aptos-224")
     batch_size = 15
     train_dataset = AptosDataset(
         csv_file=(dataset_dir / "train.csv"),
