@@ -394,7 +394,7 @@ def main():
         # snapshot_job_id=,
         # snapshot_epoch=,
     )
-    trainer.train(max_epochs=10)
+    trainer.train(max_epochs=30)
 
     cleanup()
 
