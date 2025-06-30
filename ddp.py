@@ -8,7 +8,7 @@ from typing import Iterable, Union
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import cohen_kappa_score, f1_score, accuracy_score
+from sklearn.metrics import cohen_kappa_score, f1_score, accuracy_score, precision_score, recall_score
 import torch
 from torch import optim, nn
 import torch.distributed as dist
@@ -222,9 +222,9 @@ class Trainer:
             self.model.train()
             dist.broadcast(save_model, src=0)
 
-            if save_model:
-                print(f"Saving snapshot at epoch {epoch}")
-                self._save_snapshot(epoch)
+            # if save_model:
+            #     print(f"Saving snapshot at epoch {epoch}")
+            #     self._save_snapshot(epoch)
 
     @torch.no_grad()
     def _evaluate(self, epoch):
@@ -264,13 +264,29 @@ class Trainer:
 
             qwk = cohen_kappa_score(all_targets, all_output, weights="quadratic")
             weighted_f1 = f1_score(all_targets, all_output, average="weighted")
+            macro_f1 = f1_score(all_targets, all_output, average="macro")
+            weighted_precision = precision_score(all_targets, all_output, average="weighted")
+            macro_precision = precision_score(all_targets, all_output, average="macro")
+            weighted_recall = recall_score(all_targets, all_output, average="weighted")
+            macro_recall = recall_score(all_targets, all_output, average="macro")
             accuracy = accuracy_score(all_targets, all_output)
+
             print(f"Epoch {epoch} | Validation QWK: {qwk}")
             print(f"Epoch {epoch} | Validation Weighted F1: {weighted_f1}")
+            print(f"Epoch {epoch} | Validation Macro F1: {macro_f1}")
+            print(f"Epoch {epoch} | Validation Weighted Precision: {weighted_precision}")
+            print(f"Epoch {epoch} | Validation Macro Precision: {macro_precision}")
+            print(f"Epoch {epoch} | Validation Weighted Recall: {weighted_recall}")
+            print(f"Epoch {epoch} | Validation Macro Recall: {macro_recall}")
             print(f"Epoch {epoch} | Validation Accuracy: {accuracy}")
 
             self._log_metric("qwk", qwk, epoch)
             self._log_metric("weighted_f1", weighted_f1, epoch)
+            self._log_metric("macro_f1", macro_f1, epoch)
+            self._log_metric("weighted_precision", weighted_precision, epoch)
+            self._log_metric("macro_precision", macro_precision, epoch)
+            self._log_metric("weighted_recall", weighted_recall, epoch)
+            self._log_metric("macro_recall", macro_recall, epoch)
             self._log_metric("val_accuracy", accuracy, epoch)
 
             if qwk > self.best_qwk:
@@ -281,7 +297,11 @@ class Trainer:
         return False
 
     def _log_metric(self, metric, value, epoch):
-        with open(f"/mnt/dcornelius/training_logs/{metric}.csv", "a") as f:
+        log_dir = Path(f"/mnt/dcornelius/training_logs/by_job_id/{self.job_id}")
+        os.makedirs(log_dir, exist_ok=True)
+        file_path = log_dir / f"{metric}.csv"
+
+        with open(file_path, "a") as f:
             writer = csv.writer(f)
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             model_start_job_id = self.snapshot_job_id if self.snapshot_job_id else self.job_id
@@ -308,8 +328,8 @@ class Trainer:
 
 def main():
     setup()
-    seed = 42
-    set_seed(seed)
+    # seed = 42
+    # set_seed(seed)
 
     dataset_dir = Path("/mnt/dcornelius/preprocessed-aptos")
     batch_size = 15
@@ -320,7 +340,7 @@ def main():
         label_col="diagnosis",
         transform=Normalize(),
     )
-    train_sampler = DistributedSampler(train_dataset, shuffle=True, drop_last=True, seed=seed)
+    train_sampler = DistributedSampler(train_dataset, shuffle=True, drop_last=True)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler, shuffle=False, num_workers=2)
 
     test_dataset = AptosDataset(
@@ -330,7 +350,7 @@ def main():
         label_col="diagnosis",
         transform=Normalize(),
     )
-    test_sampler = DistributedSampler(test_dataset, shuffle=False, drop_last=True, seed=seed)
+    test_sampler = DistributedSampler(test_dataset, shuffle=True, drop_last=True)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, sampler=test_sampler, shuffle=False, num_workers=2)
     
     model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
@@ -345,7 +365,7 @@ def main():
         # snapshot_job_id=,
         # snapshot_epoch=,
     )
-    trainer.train(max_epochs=10)
+    trainer.train(max_epochs=30)
     
     cleanup()
 
