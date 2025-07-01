@@ -336,6 +336,11 @@ class Trainer:
 
                 self._log_metric("val_accuracy", accuracy, epoch)
                 self._log_metric("weighted_f1", weighted_f1, epoch)
+                self._log_metric("macro_f1", macro_f1, epoch)
+                self._log_metric("weighted_precision", weighted_precision, epoch)
+                self._log_metric("macro_precision", macro_precision, epoch)
+                self._log_metric("weighted_recall", weighted_recall, epoch)
+                self._log_metric("macro_recall", macro_recall, epoch)
                 self._log_metric("qwk", qwk, epoch)
 
                 if qwk > self.best_qwk:
