@@ -22,6 +22,9 @@ torchx run -s kubernetes dist.ddp -j 2x2 --script /mnt/dcornelius/code/distribut
 
 
 
+### communication time
+torchx run -s kubernetes dist.ddp -j 1x2 --script /mnt/dcornelius/code/distributed-deep-learning/communication_time.py --mount type=volume,src=nas-pvc,dst=/mnt/dcornelius --cpu 4 --gpu 2 --memMB 8192 --image darrellcr/ddpnpp:v2
+torchx run -s kubernetes dist.ddp -j 2x1 --script /mnt/dcornelius/code/distributed-deep-learning/communication_time.py --mount type=volume,src=nas-pvc,dst=/mnt/dcornelius --cpu 4 --gpu 1 --memMB 8192 --image darrellcr/ddpnpp:v2
 
 
 ### single with ddp

@@ -33,7 +33,6 @@ def measure_communication_time():
 
         torch.cuda.synchronize()
         elapsed_time = start_time.elapsed_time(end_time)
-        print(f"Rank {global_rank} sent tensor of size {tensor_size} in {elapsed_time:.2f} ms")
         return elapsed_time
     elif global_rank == 1:
         tensor = torch.zeros(tensor_size, dtype=torch.float32, device=f"cuda:{local_rank}")
@@ -49,6 +48,8 @@ def measure_communication_time():
 def main():
     setup()
     job_id = os.getenv("TORCHX_JOB_ID", "local").split("/")[-1]
+    gpu_name = torch.cuda.get_device_name(torch.cuda.current_device())
+    print(f"Job ID: {job_id}, GPU: {gpu_name}, Rank: {dist.get_rank()}, Local Rank: {dist.get_rank() % torch.cuda.device_count()}")
 
     # elapsed_time = measure_communication_time()
     if dist.get_rank() == 0:
